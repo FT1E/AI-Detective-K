@@ -1,7 +1,9 @@
 import asyncio
+import io
 import json
 import os
 import random
+import uuid
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -10,6 +12,7 @@ from fastapi import FastAPI, File, Form, UploadFile, WebSocket, WebSocketDisconn
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from PIL import Image
 # --- OAK camera integration (optional) ---
 import base64
 try:
@@ -882,6 +885,401 @@ async def vision_sync(
         "size": file.size,
         "content_type": file.content_type,
     }
+
+
+# ---------------------------------------------------------------------------
+# Camera Payload Processor
+# Transforms raw camera detections + frames into UI overlay + chatbot payloads
+# ---------------------------------------------------------------------------
+
+# Frame-to-frame tracking state (in-memory, per camera)
+_previous_track_ids: dict[str, set[str]] = {}  # camera_id -> set of track ids
+_previous_centroids: dict[str, dict[str, list[float]]] = {}  # camera_id -> {track_id: [cx, cy]}
+
+CONFIDENCE_THRESHOLD = 0.40
+THUMBNAIL_MAX_PX = 128
+FRAME_PREVIEW_WIDTH = 640
+SUDDEN_MOTION_THRESHOLD = 0.15  # normalized distance between centroids
+
+
+def _decode_base64_image(b64_str: str) -> Image.Image | None:
+    """Decode a base64 string to a PIL Image. Returns None on failure."""
+    try:
+        # Strip data URI prefix if present
+        if "," in b64_str[:100]:
+            b64_str = b64_str.split(",", 1)[1]
+        raw = base64.b64decode(b64_str)
+        return Image.open(io.BytesIO(raw))
+    except Exception:
+        return None
+
+
+def _image_to_data_uri(img: Image.Image, max_dim: int | None = None) -> str:
+    """Encode a PIL Image to a JPEG base64 data URI, optionally resizing."""
+    if max_dim:
+        img.thumbnail((max_dim, max_dim), Image.LANCZOS)
+    buf = io.BytesIO()
+    img.convert("RGB").save(buf, format="JPEG", quality=80)
+    b64 = base64.b64encode(buf.getvalue()).decode()
+    return f"data:image/jpeg;base64,{b64}"
+
+
+def _clamp(v: float, lo: float = 0.0, hi: float = 1.0) -> float:
+    return max(lo, min(hi, v))
+
+
+def _normalize_bbox(det: dict, canvas_w: int | None, canvas_h: int | None) -> list[float] | None:
+    """Return [x_min, y_min, x_max, y_max] normalized 0..1, or None."""
+    # Already normalized
+    if "bbox_norm" in det:
+        b = det["bbox_norm"]
+        if isinstance(b, list) and len(b) == 4:
+            return [_clamp(v) for v in b]
+
+    # Pixel bbox: [x, y, w, h]
+    if "bbox_px" in det and canvas_w and canvas_h:
+        x, y, w, h = det["bbox_px"]
+        return [
+            _clamp(x / canvas_w),
+            _clamp(y / canvas_h),
+            _clamp((x + w) / canvas_w),
+            _clamp((y + h) / canvas_h),
+        ]
+
+    # Pixel bbox as [x_min, y_min, x_max, y_max] (some pipelines use this)
+    if "bbox" in det and canvas_w and canvas_h:
+        b = det["bbox"]
+        if isinstance(b, list) and len(b) == 4:
+            x1, y1, x2, y2 = b
+            # Heuristic: if values > 1, treat as pixels
+            if any(v > 1 for v in b):
+                return [
+                    _clamp(x1 / canvas_w),
+                    _clamp(y1 / canvas_h),
+                    _clamp(x2 / canvas_w),
+                    _clamp(y2 / canvas_h),
+                ]
+            return [_clamp(v) for v in b]
+
+    return None
+
+
+def _crop_thumbnail(img: Image.Image, bbox_norm: list[float]) -> str | None:
+    """Crop a detection from the frame and return a thumbnail data URI."""
+    try:
+        w, h = img.size
+        x1 = int(bbox_norm[0] * w)
+        y1 = int(bbox_norm[1] * h)
+        x2 = int(bbox_norm[2] * w)
+        y2 = int(bbox_norm[3] * h)
+        # Ensure non-zero crop
+        if x2 <= x1 or y2 <= y1:
+            return None
+        crop = img.crop((x1, y1, x2, y2))
+        return _image_to_data_uri(crop, max_dim=THUMBNAIL_MAX_PX)
+    except Exception:
+        return None
+
+
+def _compute_centroid(bbox_norm: list[float]) -> list[float]:
+    return [
+        (bbox_norm[0] + bbox_norm[2]) / 2,
+        (bbox_norm[1] + bbox_norm[3]) / 2,
+    ]
+
+
+def _centroid_distance(a: list[float], b: list[float]) -> float:
+    return ((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2) ** 0.5
+
+
+class CameraPayload(BaseModel):
+    detections: list[dict] = []
+    rgb_base64: str = ""
+    depth_base64: str = ""
+    canvas_size: dict | None = None  # {"width": int, "height": int}
+    camera_id: str = "cam-1"
+    frame_index: int | None = None
+    timestamp: float | str | None = None
+
+
+@app.post("/api/camera-payload")
+async def process_camera_payload(payload: CameraPayload):
+    now_iso = datetime.utcnow().isoformat() + "Z"
+
+    # --- Resolve timestamp ---
+    if payload.timestamp:
+        if isinstance(payload.timestamp, (int, float)):
+            ts_iso = datetime.utcfromtimestamp(payload.timestamp).isoformat() + "Z"
+        else:
+            ts_iso = str(payload.timestamp)
+    else:
+        ts_iso = now_iso
+
+    snapshot_id = f"f_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
+    cam_id = payload.camera_id
+
+    # --- Validate inputs ---
+    errors = []
+    if not isinstance(payload.detections, list):
+        errors.append("detections is not a list")
+    if not payload.rgb_base64:
+        errors.append("rgb_base64 is empty")
+
+    if errors:
+        err_msg = "; ".join(errors)
+        return {
+            "ui_display": {"error": err_msg},
+            "chatbot_payload": {"error": err_msg},
+        }
+
+    # --- Decode images ---
+    rgb_img = _decode_base64_image(payload.rgb_base64)
+    canvas_w = None
+    canvas_h = None
+    if payload.canvas_size:
+        canvas_w = payload.canvas_size.get("width")
+        canvas_h = payload.canvas_size.get("height")
+    if rgb_img and not canvas_w:
+        canvas_w, canvas_h = rgb_img.size
+
+    # --- Frame preview ---
+    frame_preview = None
+    rgb_decode_error = None
+    if rgb_img:
+        frame_preview = _image_to_data_uri(rgb_img.copy(), max_dim=FRAME_PREVIEW_WIDTH)
+    else:
+        rgb_decode_error = "Failed to decode rgb_base64"
+
+    # --- Filter and process detections ---
+    overlays = []
+    chat_detections = []
+    evidence_list = []
+    current_track_ids: set[str] = set()
+    current_centroids: dict[str, list[float]] = {}
+    prev_ids = _previous_track_ids.get(cam_id, set())
+    prev_centroids = _previous_centroids.get(cam_id, {})
+    timeline_events = []
+    event_counter = 0
+
+    for idx, det in enumerate(payload.detections):
+        # Confidence filter
+        raw_conf = det.get("confidence", 0)
+        if isinstance(raw_conf, str):
+            try:
+                raw_conf = float(raw_conf)
+            except ValueError:
+                raw_conf = 0
+        if raw_conf < CONFIDENCE_THRESHOLD:
+            continue
+
+        conf_pct = int(round(raw_conf * 100)) if raw_conf <= 1 else int(round(raw_conf))
+
+        # Track ID
+        track_id = det.get("track_id") or det.get("id")
+        if track_id:
+            track_id = f"t_{track_id}" if not str(track_id).startswith("t_") else str(track_id)
+        else:
+            track_id = f"t_{idx}"
+
+        label = det.get("label", "unknown")
+
+        # Normalize bbox
+        bbox_norm = _normalize_bbox(det, canvas_w, canvas_h)
+        if not bbox_norm:
+            continue
+
+        centroid = _compute_centroid(bbox_norm)
+        current_track_ids.add(track_id)
+        current_centroids[track_id] = centroid
+
+        # Evidence ref
+        evidence_ref = f"EVID_{snapshot_id}_{track_id}"
+
+        # Thumbnail
+        thumbnail = None
+        crop_failed_reason = None
+        if rgb_img:
+            thumbnail = _crop_thumbnail(rgb_img, bbox_norm)
+            if not thumbnail:
+                crop_failed_reason = "crop region empty or out of bounds"
+
+        # Status inference
+        status = "present"
+        if track_id not in prev_ids:
+            status = "entered"
+        elif track_id in prev_centroids:
+            dist = _centroid_distance(centroid, prev_centroids[track_id])
+            if dist > SUDDEN_MOTION_THRESHOLD:
+                status = "moving"
+            elif dist < 0.01:
+                status = "stationary"
+
+        # Bbox in pixels
+        bbox_px = None
+        if canvas_w and canvas_h:
+            bx = int(bbox_norm[0] * canvas_w)
+            by = int(bbox_norm[1] * canvas_h)
+            bw = int((bbox_norm[2] - bbox_norm[0]) * canvas_w)
+            bh = int((bbox_norm[3] - bbox_norm[1]) * canvas_h)
+            bbox_px = [bx, by, bw, bh]
+
+        # Depth mean
+        depth_mean = det.get("depth_mean") or det.get("depth_m")
+
+        # Extra metadata
+        meta = {"track_history_len": det.get("track_history_len", 1), "raw_confidence": raw_conf}
+        if crop_failed_reason:
+            meta["crop_failed_reason"] = crop_failed_reason
+        # Pass through any thermal/velocity data
+        if "temp" in det:
+            meta["thermal"] = det["temp"]
+        if "speed" in det or "speed_kmh" in det:
+            meta["speed"] = det.get("speed") or det.get("speed_kmh")
+        if "direction_changes" in det:
+            meta["direction_changes"] = det["direction_changes"]
+
+        # Build overlay
+        overlay = {
+            "id": track_id,
+            "label": label,
+            "confidence": conf_pct,
+            "bbox_norm": bbox_norm,
+            "bbox_px": bbox_px,
+            "centroid_norm": centroid,
+            "thumbnail_data_uri": thumbnail,
+            "depth_mean": float(depth_mean) if depth_mean is not None else None,
+            "status": status,
+            "meta": meta,
+        }
+        overlays.append(overlay)
+
+        # Notes for chatbot
+        notes = ""
+        if det.get("temp") and isinstance(det["temp"], (int, float)) and det["temp"] > 37.5:
+            notes = "thermal spike"
+        if det.get("speed_kmh") and det["speed_kmh"] > 6:
+            notes = "fast exit" if not notes else f"{notes}, fast exit"
+        if det.get("direction_changes") and det["direction_changes"] > 4:
+            notes = "erratic movement" if not notes else f"{notes}, erratic movement"
+
+        chat_detections.append({
+            "id": track_id,
+            "label": label,
+            "confidence": conf_pct,
+            "bbox_norm": bbox_norm,
+            "centroid_norm": centroid,
+            "evidence_ref": evidence_ref,
+            "notes": notes,
+        })
+
+        # Evidence entry (thumbnail ref)
+        evidence_list.append({
+            "evidence_id": evidence_ref,
+            "type": "image",
+            "ref": f"evidence://{snapshot_id}/{track_id}/thumb.jpg",
+            "short_desc": f"thumbnail crop of {label}",
+        })
+
+        # Timeline events for entered detections
+        if status == "entered":
+            event_counter += 1
+            timeline_events.append({
+                "id": f"E{event_counter}",
+                "type": "enter",
+                "timestamp_iso": ts_iso,
+                "related_ids": [track_id],
+                "short": f"{label} entered scene",
+                "detail": f"{label} (conf {conf_pct}%) first detected at [{centroid[0]:.2f}, {centroid[1]:.2f}]",
+            })
+
+        if status == "moving" and track_id in prev_centroids:
+            dist = _centroid_distance(centroid, prev_centroids[track_id])
+            if dist > SUDDEN_MOTION_THRESHOLD * 2:
+                event_counter += 1
+                timeline_events.append({
+                    "id": f"E{event_counter}",
+                    "type": "sudden_motion",
+                    "timestamp_iso": ts_iso,
+                    "related_ids": [track_id],
+                    "short": f"{label} rapid displacement",
+                    "detail": f"{label} moved {dist:.3f} normalized units between frames",
+                })
+
+        # Thermal spike event
+        if det.get("temp") and isinstance(det["temp"], (int, float)) and det["temp"] > 37.5:
+            event_counter += 1
+            timeline_events.append({
+                "id": f"E{event_counter}",
+                "type": "thermal_spike",
+                "timestamp_iso": ts_iso,
+                "related_ids": [track_id],
+                "short": f"{label} thermal spike {det['temp']}°C",
+                "detail": f"Thermal reading {det['temp']}°C exceeds 37.5°C threshold",
+            })
+
+    # Exit events: track IDs that were in previous frame but not current
+    for gone_id in prev_ids - current_track_ids:
+        event_counter += 1
+        timeline_events.append({
+            "id": f"E{event_counter}",
+            "type": "exit",
+            "timestamp_iso": ts_iso,
+            "related_ids": [gone_id],
+            "short": f"{gone_id} exited scene",
+            "detail": f"Track {gone_id} no longer detected",
+        })
+
+    # Update tracking state
+    _previous_track_ids[cam_id] = current_track_ids
+    _previous_centroids[cam_id] = current_centroids
+
+    # Depth evidence ref
+    if payload.depth_base64:
+        evidence_list.append({
+            "evidence_id": f"EVID_{snapshot_id}_depth",
+            "type": "depth",
+            "ref": f"evidence://{snapshot_id}/depth_map",
+            "short_desc": "depth frame for this snapshot",
+        })
+
+    # --- Build outputs ---
+    ui_display = {
+        "frame_id": snapshot_id,
+        "timestamp_iso": ts_iso,
+        "canvas_size": {"width": canvas_w, "height": canvas_h} if canvas_w else None,
+        "overlays": overlays,
+        "timeline_events": timeline_events,
+        "frame_preview": frame_preview,
+    }
+    if rgb_decode_error:
+        ui_display["meta"] = {"error": rgb_decode_error}
+
+    chatbot_payload = {
+        "snapshot_id": snapshot_id,
+        "timestamp_iso": ts_iso,
+        "scene_summary": {
+            "num_detections": len(chat_detections),
+        },
+        "detections": chat_detections,
+        "evidence": evidence_list,
+        "derived_events": [
+            {
+                "type": ev["type"],
+                "id": ev["id"],
+                "timestamp_iso": ev["timestamp_iso"],
+                "involved": ev["related_ids"],
+                "confidence": 85,
+            }
+            for ev in timeline_events
+        ],
+        "processing_meta": {
+            "camera_id": cam_id,
+            "frame_index": payload.frame_index,
+            "source": "oak_api",
+        },
+    }
+
+    return {"ui_display": ui_display, "chatbot_payload": chatbot_payload}
 
 
 if __name__ == "__main__":
