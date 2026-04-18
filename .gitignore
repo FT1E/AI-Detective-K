@@ -1,32 +1,24 @@
-# Dependencies
-node_modules/
-frontend/node_modules/
 
-# Build output
-frontend/dist/
-frontend/.vite/
+# Environment files (NEVER commit these!)
+.env
+*.env
+!.env.example
+
+# Docker
+docker-compose.override.yml
 
 # Python
 __pycache__/
 *.pyc
 *.pyo
-*.egg-info/
-.venv/
-venv/
-env/
+*.pyd
+.Python
+*.so
 
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-.DS_Store
+# Node
+node_modules/
+dist/
+build/
 
-# Environment
-.env
-.env.local
-.env.*.local
-
-# Project docs (not for repo)
-/IDEA.md
-/CLAUDE.md
+# Logs
+*.log
