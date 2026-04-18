@@ -1,12 +1,24 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { DepthAIContext, useDaiConnection } from '@luxonis/depthai-viewer-common'
-import '@luxonis/depthai-viewer-common/styles'
 import FootageReview from './components/FootageReview'
 import IncidentReport from './components/IncidentReport'
 import EventTimeline from './components/EventTimeline'
+import DetectiveChat from './components/DetectiveChat'
+
+// OAK integration is optional — app works without it
+let DepthAIContext, useDaiConnection
+try {
+  const oak = await import('@luxonis/depthai-viewer-common')
+  DepthAIContext = oak.DepthAIContext
+  useDaiConnection = oak.useDaiConnection
+  await import('@luxonis/depthai-viewer-common/styles')
+} catch {
+  // OAK packages not available — run without camera integration
+}
+
+const EMPTY_OAK = { connected: false, topics: [] }
 
 function Dashboard() {
-  const oakConnection = useDaiConnection()
+  const oakConnection = useDaiConnection ? useDaiConnection() : EMPTY_OAK
 
   const [recording, setRecording] = useState(false)
   const [events, setEvents] = useState([])
@@ -14,8 +26,17 @@ function Dashboard() {
   const [analyzing, setAnalyzing] = useState(false)
   const [viewMode, setViewMode] = useState('rgb')
   const [selectedEvent, setSelectedEvent] = useState(null)
+  const [caseData, setCaseData] = useState(null)
   const wsRef = useRef(null)
   const [backendConnected, setBackendConnected] = useState(false)
+
+  // Load dummy case data on mount
+  useEffect(() => {
+    fetch('/api/case/dummy')
+      .then(res => res.json())
+      .then(data => setCaseData(data))
+      .catch(() => {})
+  }, [])
 
   const connectWs = useCallback(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -87,14 +108,12 @@ function Dashboard() {
               Case {report.case_id}
             </span>
           )}
-          {/* OAK Camera status */}
-          <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${oakConnection.connected ? 'bg-detective-success' : 'bg-yellow-500'}`} />
-            <span className="text-gray-400 text-xs">
-              {oakConnection.connected ? 'OAK Connected' : 'OAK Disconnected'}
-            </span>
-          </div>
-          {/* Backend status */}
+          {oakConnection.connected && (
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-detective-success" />
+              <span className="text-gray-400 text-xs">OAK Connected</span>
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${backendConnected ? 'bg-detective-success' : 'bg-detective-danger'}`} />
             <span className="text-gray-400 text-xs">{backendConnected ? 'Backend Online' : 'Connecting...'}</span>
@@ -108,11 +127,10 @@ function Dashboard() {
         </div>
       </header>
 
-      {/* Main Content */}
+      {/* Main Content — 3 columns */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left — Footage Review + Timeline (compact) */}
-        <div className="w-[38%] flex flex-col border-r border-detective-600/30 shrink-0">
-          {/* Footage */}
+        {/* Left — Footage + Timeline */}
+        <div className="w-[28%] flex flex-col border-r border-detective-600/30 shrink-0">
           <div className="h-[45%] flex flex-col border-b border-detective-600/20">
             <FootageReview
               recording={recording}
@@ -126,7 +144,6 @@ function Dashboard() {
               selectedEvent={selectedEvent}
             />
           </div>
-          {/* Event Timeline */}
           <div className="flex-1 overflow-hidden">
             <EventTimeline
               events={events}
@@ -137,8 +154,8 @@ function Dashboard() {
           </div>
         </div>
 
-        {/* Right — Investigation Report (dominant) */}
-        <div className="flex-1 overflow-hidden">
+        {/* Center — Investigation Report */}
+        <div className="flex-1 overflow-hidden border-r border-detective-600/30">
           <IncidentReport
             report={report}
             phase={phase}
@@ -146,18 +163,26 @@ function Dashboard() {
             eventCount={events.length}
           />
         </div>
+
+        {/* Right — Detective Chat */}
+        <div className="w-[28%] overflow-hidden shrink-0">
+          <DetectiveChat caseData={caseData} />
+        </div>
       </div>
     </div>
   )
 }
 
 export default function App() {
-  return (
-    <DepthAIContext
-      connectionConfig={{ type: 'ws', wsUrl: 'ws://localhost:8765' }}
-      activeServices={[]}
-    >
-      <Dashboard />
-    </DepthAIContext>
-  )
+  if (DepthAIContext) {
+    return (
+      <DepthAIContext
+        connectionConfig={{ type: 'ws', wsUrl: 'ws://localhost:8765' }}
+        activeServices={[]}
+      >
+        <Dashboard />
+      </DepthAIContext>
+    )
+  }
+  return <Dashboard />
 }

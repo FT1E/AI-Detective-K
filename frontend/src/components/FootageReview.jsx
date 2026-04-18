@@ -1,5 +1,11 @@
 import { useState, useEffect } from 'react'
-import { Streams } from '@luxonis/depthai-viewer-common'
+
+// OAK Streams component is optional
+let Streams = null
+try {
+  const oak = await import('@luxonis/depthai-viewer-common')
+  Streams = oak.Streams
+} catch {}
 
 const VIEW_MODES = [
   { id: 'rgb', label: 'RGB', color: 'from-blue-500 to-cyan-500' },
@@ -21,15 +27,15 @@ function OakCameraFeed({ viewMode, oakConnection, recording, selectedEvent }) {
   useEffect(() => {
     if (streamReady) return
     if (
-      Array.isArray(oakConnection.topics) &&
+      Array.isArray(oakConnection?.topics) &&
       oakConnection.topics.some((t) => t.name === 'Video')
     ) {
       setStreamReady(true)
     }
-  }, [oakConnection.topics, streamReady])
+  }, [oakConnection?.topics, streamReady])
 
   // OAK device connected and stream available — show real feed
-  if (oakConnection.connected && streamReady) {
+  if (Streams && oakConnection?.connected && streamReady) {
     return (
       <div className="relative w-full h-full bg-black overflow-hidden">
         <Streams
@@ -49,7 +55,7 @@ function OakCameraFeed({ viewMode, oakConnection, recording, selectedEvent }) {
   }
 
   // OAK connected but stream not yet available
-  if (oakConnection.connected && !streamReady) {
+  if (Streams && oakConnection?.connected && !streamReady) {
     return (
       <div className="relative w-full h-full bg-gradient-to-br from-detective-700 to-detective-800 flex flex-col items-center justify-center">
         <div className="w-10 h-10 rounded-full border-2 border-detective-accent/50 border-t-detective-accent animate-spin mb-3" />
