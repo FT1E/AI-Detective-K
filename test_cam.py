@@ -1,30 +1,27 @@
+#!/usr/bin/env python3
+
 import cv2
 import depthai as dai
 
-pipeline = dai.Pipeline()
+# Create pipeline
+with dai.Pipeline() as pipeline:
 
-# Initialize the camera and build it
-cam = pipeline.create(dai.node.Camera).build()
 
-# FIX: Use the size and type directly. 
-# This avoids 'dai.Capability' which is likely causing your current error.
-video_out = cam.requestOutput(size=(1920, 1080), type=dai.ImgFrame.Type.NV12)
+    # Define source and output
+    # base queue for rgb frames
+    cam = pipeline.create(dai.node.Camera).build()
+    videoQueue = cam.requestOutput((640,400)).createOutputQueue()
 
-# Create the queue
-video_queue = video_out.createOutputQueue()
 
-# Start the pipeline
-pipeline.start()
+    # Connect to device and start pipeline
+    pipeline.start()
+    while pipeline.isRunning():
+        videoIn = videoQueue.get()
+        assert isinstance(videoIn, dai.ImgFrame)
 
-print("Camera started. Press 'q' to exit.")
+        videoIn.getCvFrame()        # send this to server
+        cv2.imshow("video", videoIn.getCvFrame())
 
-while True:
-    # Retrieve the frame
-    frame = video_queue.get()
-    
-    if frame is not None:
-        # Convert and show
-        cv2.imshow("AI Detective K - Feed", frame.getCvFrame())
-
-    if cv2.waitKey(1) == ord('q'):
-        break
+        # todo - stopping logic (camera turns off or ?)
+        if cv2.waitKey(1) == ord("q"):
+            break
