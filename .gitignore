@@ -21,4 +21,4 @@ dist/
 build/
 
 # Logs
-*.log
+*.log".claude/" 

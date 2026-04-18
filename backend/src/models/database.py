@@ -76,4 +76,4 @@ class BlockchainRecord(Base):
     tx_hash     = Column(String(66), nullable=False)
     block_number = Column(Integer)
     timestamp   = Column(TIMESTAMP,  nullable=False, server_default=func.now())
-    metadata    = Column(JSONB)
+    record_metadata    = Column(JSONB)
