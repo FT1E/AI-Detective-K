@@ -1,4 +1,4 @@
-import { getApiUrl } from "./backend";
+import { getApiUrl } from "./urls";
 
 /**
  * Fetch the initial case data from the backend.
@@ -47,37 +47,32 @@ export async function runAnalysis() {
 /**
  * Vision Sync Trigger — sends video/sensor data to the backend for processing.
  *
- * This will eventually POST the video file (or a reference / metadata) to
- * a dedicated backend endpoint that ingests the footage and kicks off the
- * detection + analysis pipeline.
+ * POSTs the video file, sensor mode, and optional metadata to the backend.
+ * The backend stores the file, starts the processing pipeline, and returns
+ * an acknowledgement with a job/session ID.
  *
  * @param {File}   file     The video file selected by the user.
  * @param {string} mode     The sensor mode — "rgb" | "thermal" | "depth".
  * @param {object} [meta]   Optional extra metadata to attach.
- * @returns {Promise<object>} Backend acknowledgement (shape TBD).
+ * @returns {Promise<object>} Backend acknowledgement.
  */
 export async function triggerVisionSync(file, mode, meta = {}) {
-  // TODO: implement when backend endpoint is ready
-  //
-  // Planned flow:
-  //   1. Build a FormData with the file + mode + meta
-  //   2. POST to getApiUrl("/vision-sync")
-  //   3. Backend stores the file, starts the processing pipeline,
-  //      and returns an ack with a job/session ID
-  //
-  // const form = new FormData();
-  // form.append("file", file);
-  // form.append("mode", mode);
-  // form.append("meta", JSON.stringify(meta));
-  //
-  // const res = await fetch(getApiUrl("/vision-sync"), {
-  //   method: "POST",
-  //   body: form,
-  // });
-  // if (!res.ok) throw new Error(`Vision sync failed: ${res.status}`);
-  // return res.json();
+  const form = new FormData();
+  form.append("file", file);
+  form.append("mode", mode);
+  form.append("meta", JSON.stringify(meta));
 
-  return { status: "pending", mode, fileName: file.name };
+  const res = await fetch(getApiUrl("/vision-sync"), {
+    method: "POST",
+    body: form,
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Vision sync failed: ${res.status} ${text.slice(0, 200)}`);
+  }
+
+  return res.json();
 }
 
 /**
