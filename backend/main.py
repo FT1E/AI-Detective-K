@@ -2,15 +2,21 @@
 import asyncio
 import json
 import random
+import threading
+import time
 from datetime import datetime, timedelta
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-# --- OAK camera integration ---
 import cv2
 import depthai as dai
 import base64
 
+from src.config import AsyncSessionLocal
+from src.services import case_service
+from src.api.routes import router as api_router
+
 app = FastAPI(title="AI Detective K")
+app.include_router(api_router, prefix="/api", tags=["cases"])
 
 app.add_middleware(
     CORSMiddleware,
@@ -19,9 +25,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# In-memory state
 recording = False
-events: list[dict] = []
+current_case_id: str | None = None
 
 
 SUBJECTS = [
@@ -125,7 +130,6 @@ def generate_incident_report(collected_events: list[dict]) -> dict:
     high_events = [e for e in collected_events if e["severity"] == "high"]
     medium_events = [e for e in collected_events if e["severity"] == "medium"]
 
-    # Identify key subjects
     subject_ids = {}
     for e in collected_events:
         sid = e["subject"]["id"]
@@ -134,7 +138,6 @@ def generate_incident_report(collected_events: list[dict]) -> dict:
         subject_ids[sid]["events"].append(e)
         subject_ids[sid]["zones"].add(e["zone"])
 
-    # Build subject profiles
     subject_profiles = []
     for sid, data in subject_ids.items():
         severity_max = "low"
@@ -155,11 +158,9 @@ def generate_incident_report(collected_events: list[dict]) -> dict:
             "last_seen": data["events"][-1]["timestamp"],
         })
 
-    # Sort profiles by involvement
     severity_order = {"high": 0, "medium": 1, "low": 2}
     subject_profiles.sort(key=lambda s: severity_order.get(s["involvement_level"], 3))
 
-    # Build evidence chain
     evidence_chain = []
     for i, e in enumerate(collected_events):
         evidence_chain.append({
@@ -176,7 +177,6 @@ def generate_incident_report(collected_events: list[dict]) -> dict:
             "severity": e["severity"],
         })
 
-    # Determine overall threat assessment
     if len(high_events) >= 3:
         threat_level = "critical"
         threat_label = "CRITICAL — Multiple high-severity indicators detected"
@@ -190,17 +190,12 @@ def generate_incident_report(collected_events: list[dict]) -> dict:
         threat_level = "moderate"
         threat_label = "MODERATE — Minor anomalies observed"
 
-    # Sensor coverage summary
-    all_sensors = set()
-    for e in collected_events:
-        all_sensors.update(e["sensors"])
     sensor_contributions = {
         "rgb": sum(1 for e in collected_events if "rgb" in e["sensors"]),
         "thermal": sum(1 for e in collected_events if "thermal" in e["sensors"]),
         "depth": sum(1 for e in collected_events if "depth" in e["sensors"]),
     }
 
-    # Build narrative
     narrative_parts = []
     narrative_parts.append(
         f"During the observation window, {len(collected_events)} distinct events were captured across {len(set(e['zone'] for e in collected_events))} monitored zones. "
@@ -228,7 +223,6 @@ def generate_incident_report(collected_events: list[dict]) -> dict:
             "Thermal readings indicate the object was not recently body-carried, suggesting premeditated placement."
         )
 
-    # Key findings
     key_findings = []
     if any(e["type"] == "concealed_presence" for e in collected_events):
         key_findings.append({
@@ -268,7 +262,6 @@ def generate_incident_report(collected_events: list[dict]) -> dict:
         })
 
     return {
-        "case_id": f"DK-{datetime.now().strftime('%Y%m%d')}-{random.randint(1000, 9999)}",
         "generated_at": datetime.now().isoformat(),
         "observation_window": {
             "start": collected_events[0]["timestamp"],
@@ -298,25 +291,34 @@ def generate_incident_report(collected_events: list[dict]) -> dict:
 
 @app.get("/api/status")
 async def status():
-    return {"recording": recording, "event_count": len(events)}
+    return {"recording": recording, "case_id": current_case_id}
 
 
 @app.websocket("/ws/events")
 async def websocket_events(websocket: WebSocket):
     await websocket.accept()
-    global recording, events
+    global recording, current_case_id
+    session_events: list[dict] = []
+
     try:
         while True:
             msg = await websocket.receive_text()
             data = json.loads(msg)
 
-
             if data.get("action") == "start":
                 recording = True
-                events = []
-                await websocket.send_text(json.dumps({"type": "status", "recording": True}))
+                session_events = []
 
-                # --- OAK camera pipeline setup ---
+                async with AsyncSessionLocal() as db:
+                    current_case_id = await case_service.create_case(db)
+
+                await websocket.send_text(json.dumps({
+                    "type": "status",
+                    "recording": True,
+                    "case_id": current_case_id,
+                }))
+
+                # OAK camera pipeline
                 pipeline = dai.Pipeline()
                 camRgb = pipeline.create(dai.node.ColorCamera)
                 camRgb.setPreviewSize(640, 480)
@@ -326,57 +328,57 @@ async def websocket_events(websocket: WebSocket):
                 xoutRgb.setStreamName("video")
                 camRgb.preview.link(xoutRgb.input)
 
-                # Run camera in a thread to avoid blocking
-                def camera_loop():
+                loop = asyncio.get_running_loop()
+
+                async def send_frame(jpg_b64: str) -> None:
+                    await websocket.send_text(json.dumps({"type": "frame", "data": jpg_b64}))
+
+                def camera_loop() -> None:
                     with dai.Device(pipeline) as device:
-                        qRgb = device.getOutputQueue(name="video", maxSize=4, blocking=False)
+                        q = device.getOutputQueue(name="video", maxSize=4, blocking=False)
                         while recording:
-                            inRgb = qRgb.tryGet()
-                            if inRgb is not None:
-                                frame = inRgb.getCvFrame()
-                                # Encode frame as JPEG
-                                _, jpeg = cv2.imencode('.jpg', frame)
-                                jpg_bytes = jpeg.tobytes()
-                                jpg_b64 = base64.b64encode(jpg_bytes).decode('utf-8')
-                                # Send frame to frontend
-                                asyncio.run(async_send_frame(jpg_b64))
+                            frame_in = q.tryGet()
+                            if frame_in is not None:
+                                frame = frame_in.getCvFrame()
+                                _, jpeg = cv2.imencode(".jpg", frame)
+                                b64 = base64.b64encode(jpeg.tobytes()).decode("utf-8")
+                                asyncio.run_coroutine_threadsafe(send_frame(b64), loop)
                             else:
-                                # If no frame, sleep briefly
-                                import time
                                 time.sleep(0.03)
 
-                # Async helper to send frame
-                async def async_send_frame(jpg_b64):
-                    await websocket.send_text(json.dumps({
-                        "type": "frame",
-                        "data": jpg_b64
-                    }))
+                threading.Thread(target=camera_loop, daemon=True).start()
 
-                import threading
-                cam_thread = threading.Thread(target=camera_loop, daemon=True)
-                cam_thread.start()
+                base_time = datetime.now()
+                event_offset = 0
 
-                # Keep backend loop alive while recording
+                # Event generation loop — waits up to 8s for a "stop" message,
+                # otherwise generates one event per tick and persists it to DB.
                 while recording:
-                    await asyncio.sleep(0.1)
-
-
-            elif data.get("action") == "stop":
-                recording = False
-                report = generate_incident_report(events)
-                await websocket.send_text(json.dumps({
-                    "type": "status",
-                    "recording": False,
-                }))
-                if report:
-                    await websocket.send_text(json.dumps({
-                        "type": "report",
-                        "data": report,
-                    }))
+                    try:
+                        raw = await asyncio.wait_for(websocket.receive_text(), timeout=8.0)
+                        inner = json.loads(raw)
+                        if inner.get("action") == "stop":
+                            recording = False
+                            report = generate_incident_report(session_events)
+                            if report:
+                                report["case_id"] = current_case_id
+                                async with AsyncSessionLocal() as db:
+                                    await case_service.save_report(db, current_case_id, report)
+                            await websocket.send_text(json.dumps({"type": "status", "recording": False}))
+                            if report:
+                                await websocket.send_text(json.dumps({"type": "report", "data": report}))
+                            break
+                    except asyncio.TimeoutError:
+                        if recording:
+                            event = generate_timeline_event(base_time, event_offset)
+                            event_offset += random.randint(8, 20)
+                            session_events.append(event)
+                            async with AsyncSessionLocal() as db:
+                                await case_service.add_event(db, current_case_id, event)
+                            await websocket.send_text(json.dumps({"type": "event", "data": event}))
 
     except WebSocketDisconnect:
         recording = False
-
 
 
 if __name__ == "__main__":

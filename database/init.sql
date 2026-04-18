@@ -1,12 +1,12 @@
 -- AI Detective K — Database Initialization
---
--- Schema is managed by Alembic migrations (backend/alembic/versions/).
--- This file intentionally contains no DDL so that Alembic is the single
--- source of truth.  Postgres runs this script only on the very first
--- container start (empty data dir); subsequent starts skip it entirely.
---
--- To apply the schema:
---   docker-compose exec backend alembic upgrade head
---
--- To reset everything:
---   docker-compose down -v && docker-compose up
+-- Creates the database on first container start.
+-- Schema tables are managed by Alembic migrations.
+
+CREATE DATABASE detective;
+
+-- Connect to the newly created database
+\c detective;
+
+-- Grant privileges to the detective user
+GRANT ALL PRIVILEGES ON DATABASE detective TO detective;
+GRANT ALL PRIVILEGES ON SCHEMA public TO detective;
