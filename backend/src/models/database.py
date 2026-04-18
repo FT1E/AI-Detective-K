@@ -70,10 +70,11 @@ class Report(Base):
 class BlockchainRecord(Base):
     __tablename__ = "blockchain_records"
 
-    id          = Column(Integer,    primary_key=True, autoincrement=True)
-    record_type = Column(String(50), nullable=False)
-    related_id  = Column(String(66), nullable=False, index=True)
-    tx_hash     = Column(String(66), nullable=False)
+    id           = Column(Integer,    primary_key=True, autoincrement=True)
+    record_type  = Column(String(50), nullable=False)
+    related_id   = Column(String(66), nullable=False, index=True)
+    tx_hash      = Column(String(66), nullable=False)
     block_number = Column(Integer)
-    timestamp   = Column(TIMESTAMP,  nullable=False, server_default=func.now())
-    record_metadata    = Column(JSONB)
+    timestamp    = Column(TIMESTAMP,  nullable=False, server_default=func.now())
+    # SQL column is "metadata" (from migration); Python attribute is record_metadata
+    record_metadata = Column("metadata", JSONB)

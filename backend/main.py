@@ -12,7 +12,8 @@ import depthai as dai
 import base64
 
 from src.config import AsyncSessionLocal
-from src.services import case_service
+from src.services import case_service, hash_service
+from src.services.flare_service import flare_service
 from src.api.routes import router as api_router
 
 app = FastAPI(title="AI Detective K")
@@ -312,10 +313,25 @@ async def websocket_events(websocket: WebSocket):
                 async with AsyncSessionLocal() as db:
                     current_case_id = await case_service.create_case(db)
 
+                # Touch Point 1: record case creation on blockchain
+                blockchain_tx_hash = None
+                try:
+                    bc_tx = await flare_service.create_case(
+                        case_id=current_case_id,
+                        metadata={"sensors": ["rgb", "thermal", "depth"], "location": "Crime Scene Investigation"},
+                    )
+                    blockchain_tx_hash = bc_tx["tx_hash"]
+                    async with AsyncSessionLocal() as db:
+                        await case_service.save_blockchain_record(db, current_case_id, "case_created", bc_tx)
+                    print(f"[Blockchain] Case created: {blockchain_tx_hash}")
+                except Exception as e:
+                    print(f"[Blockchain] create_case skipped: {e}")
+
                 await websocket.send_text(json.dumps({
                     "type": "status",
                     "recording": True,
                     "case_id": current_case_id,
+                    **({"blockchain_tx": blockchain_tx_hash} if blockchain_tx_hash else {}),
                 }))
 
                 # OAK camera pipeline
@@ -359,11 +375,54 @@ async def websocket_events(websocket: WebSocket):
                         inner = json.loads(raw)
                         if inner.get("action") == "stop":
                             recording = False
+
+                            # Touch Point 2: hash all events and record scene capture
+                            try:
+                                async with AsyncSessionLocal() as db:
+                                    events_data = await case_service.get_case_events(db, current_case_id)
+                                events_hash = hash_service.hash_events(events_data)
+                                bc_tx = await flare_service.record_scene_capture(
+                                    case_id=current_case_id,
+                                    events_hash=events_hash,
+                                    event_count=len(events_data),
+                                    sensors=["rgb", "thermal", "depth"],
+                                )
+                                async with AsyncSessionLocal() as db:
+                                    await case_service.save_blockchain_record(db, current_case_id, "scene_captured", bc_tx)
+                                print(f"[Blockchain] Scene captured: {bc_tx['tx_hash']}")
+                            except Exception as e:
+                                print(f"[Blockchain] record_scene_capture skipped: {e}")
+
                             report = generate_incident_report(session_events)
                             if report:
                                 report["case_id"] = current_case_id
+
+                                # Touch Point 3: hash report and record on blockchain
+                                blockchain_info = {"verified": False}
+                                try:
+                                    report_hash = hash_service.hash_dict(report)
+                                    bc_tx = await flare_service.record_report_generation(
+                                        case_id=current_case_id,
+                                        report_hash=report_hash,
+                                        threat_level=report["threat_assessment"]["level"],
+                                        subject_count=len(report["subject_profiles"]),
+                                    )
+                                    blockchain_info = {
+                                        "tx_hash": bc_tx["tx_hash"],
+                                        "block_number": bc_tx["block_number"],
+                                        "verified": True,
+                                    }
+                                    async with AsyncSessionLocal() as db:
+                                        await case_service.save_blockchain_record(db, current_case_id, "report_generated", bc_tx)
+                                    print(f"[Blockchain] Report recorded: {bc_tx['tx_hash']}")
+                                except Exception as e:
+                                    print(f"[Blockchain] record_report_generation skipped: {e}")
+                                    blockchain_info = {"verified": False, "error": str(e)}
+
+                                report["blockchain"] = blockchain_info
                                 async with AsyncSessionLocal() as db:
                                     await case_service.save_report(db, current_case_id, report)
+
                             await websocket.send_text(json.dumps({"type": "status", "recording": False}))
                             if report:
                                 await websocket.send_text(json.dumps({"type": "report", "data": report}))
