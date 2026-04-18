@@ -862,6 +862,17 @@ async def get_crime_scene():
     return CRIME_SCENE
 
 
+# --- Vision Sync Trigger ---
+# Receives video/sensor data from the frontend and kicks off processing.
+
+@app.post("/api/vision-sync")
+async def vision_sync():
+    # TODO: accept uploaded file + mode + metadata
+    # TODO: store the file / forward to processing pipeline
+    # TODO: return a job/session ID so frontend can track progress
+    return {"status": "pending", "message": "Vision sync endpoint not yet implemented"}
+
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))

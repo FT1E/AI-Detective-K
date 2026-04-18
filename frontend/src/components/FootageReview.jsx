@@ -201,17 +201,17 @@ export default function FootageReview({
               </svg>
             </div>
             <p className="text-sm font-medium text-gray-200">
-              Upload investigation footage
+              Vision Sync Trigger
             </p>
             <p className="mt-2 max-w-xs text-[11px] leading-relaxed text-gray-500">
-              Upload video recordings to begin analysis. You can add normal, thermal, and depth views.
+              Sync video recordings to the backend for analysis. You can add normal, thermal, and depth views.
             </p>
             <button
               type="button"
               onClick={() => openFilePicker(viewMode)}
               className="mt-4 rounded-lg border border-detective-accent/30 bg-detective-accent/15 px-3 py-1.5 text-xs font-medium text-detective-accent transition-colors hover:bg-detective-accent/25"
             >
-              Upload Video
+              Vision Sync Trigger
             </button>
           </div>
         )}
@@ -228,7 +228,7 @@ export default function FootageReview({
             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            Upload
+            Vision Sync
           </button>
           <button
             type="button"

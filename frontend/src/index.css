@@ -2,6 +2,83 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Theme color tokens (space-separated RGB for Tailwind opacity support) ── */
+:root {
+  --d-900: 10 14 26;
+  --d-800: 17 24 39;
+  --d-700: 26 35 50;
+  --d-600: 36 48 68;
+  --d-500: 45 59 82;
+  --d-accent: 0 212 255;
+  --d-warn: 255 107 53;
+  --d-danger: 255 56 96;
+  --d-success: 35 209 96;
+
+  /* Text semantic tokens */
+  --t-heading: 229 231 235;    /* gray-200 */
+  --t-primary: 209 213 219;    /* gray-300 */
+  --t-secondary: 156 163 175;  /* gray-400 */
+  --t-muted: 107 114 128;      /* gray-500 */
+  --t-faint: 75 85 99;         /* gray-600 */
+
+  --surface-video: 0 0 0;
+  --surface-overlay: 0 0 0;
+
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  --d-900: 241 245 249;
+  --d-800: 255 255 255;
+  --d-700: 226 232 240;
+  --d-600: 203 213 225;
+  --d-500: 148 163 184;
+  --d-accent: 2 132 199;
+  --d-warn: 234 88 12;
+  --d-danger: 220 38 38;
+  --d-success: 22 163 74;
+
+  --t-heading: 30 41 59;       /* slate-800 */
+  --t-primary: 51 65 85;       /* slate-700 */
+  --t-secondary: 71 85 105;    /* slate-600 */
+  --t-muted: 100 116 139;      /* slate-500 */
+  --t-faint: 148 163 184;      /* slate-400 */
+
+  --surface-video: 241 245 249;
+  --surface-overlay: 255 255 255;
+
+  color-scheme: light;
+}
+
+/* ── Gray class overrides per theme ── */
+/* In dark mode these are the Tailwind defaults. In light mode we remap them
+   so that "gray-200" (used for headings) becomes dark, etc. */
+[data-theme="light"] .text-gray-200 { color: rgb(30 41 59); }
+[data-theme="light"] .text-gray-300 { color: rgb(51 65 85); }
+[data-theme="light"] .text-gray-400 { color: rgb(71 85 105); }
+[data-theme="light"] .text-gray-500 { color: rgb(100 116 139); }
+[data-theme="light"] .text-gray-600 { color: rgb(148 163 184); }
+[data-theme="light"] .placeholder-gray-600::placeholder { color: rgb(148 163 184); }
+
+/* Keep white text on gradient buttons/badges even in light mode */
+[data-theme="light"] .bg-gradient-to-r.text-white,
+[data-theme="light"] .bg-gradient-to-br.text-white { color: white; }
+
+/* Background overrides for light theme */
+[data-theme="light"] .bg-black { background-color: rgb(241 245 249); }
+[data-theme="light"] .bg-black\/60 { background-color: rgb(255 255 255 / 0.75); }
+[data-theme="light"] .bg-black\/65 { background-color: rgb(255 255 255 / 0.8); }
+
+/* Border overrides */
+[data-theme="light"] .border-detective-600\/20 { border-color: rgb(203 213 225 / 0.4); }
+[data-theme="light"] .border-detective-600\/30 { border-color: rgb(203 213 225 / 0.5); }
+
+/* Scrollbar for light theme */
+[data-theme="light"] ::-webkit-scrollbar-track { background: #f1f5f9; }
+[data-theme="light"] ::-webkit-scrollbar-thumb { background: #cbd5e1; }
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* ── Base styles ── */
 body {
   font-family: 'Inter', sans-serif;
   margin: 0;
@@ -12,7 +89,7 @@ body {
   font-family: 'JetBrains Mono', monospace;
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar (dark default) */
 ::-webkit-scrollbar {
   width: 6px;
 }
@@ -49,4 +126,24 @@ body {
   background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.15), transparent);
   animation: scanline 4s linear infinite;
   pointer-events: none;
+}
+
+/* ── Resize handles ── */
+.resize-handle-col {
+  cursor: col-resize;
+  user-select: none;
+  touch-action: none;
+}
+.resize-handle-row {
+  cursor: row-resize;
+  user-select: none;
+  touch-action: none;
+}
+.resize-handle-col:hover,
+.resize-handle-row:hover {
+  background-color: rgb(var(--d-accent) / 0.3);
+}
+.resize-handle-col:active,
+.resize-handle-row:active {
+  background-color: rgb(var(--d-accent) / 0.5);
 }
