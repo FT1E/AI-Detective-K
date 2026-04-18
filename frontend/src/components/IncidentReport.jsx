@@ -55,9 +55,10 @@ function IdleState() {
       </svg>
       <h3 className="text-sm font-semibold text-gray-300 mb-2">Investigation Report</h3>
       <p className="text-xs text-gray-500 max-w-md leading-relaxed">
-        Record footage to capture events, then stop recording to generate a comprehensive
-        post-incident analysis. The AI detective will reconstruct the timeline, identify key
-        subjects, and explain what happened using multi-modal sensor evidence.
+        Upload the normal, thermal, and depth video views you have, then stop playback and
+        analyze to generate a comprehensive post-incident assessment. The AI detective will
+        reconstruct the timeline, identify key subjects, and explain what happened using
+        multi-modal sensor evidence.
       </p>
       <div className="flex gap-4 mt-6">
         {[

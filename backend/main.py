@@ -799,6 +799,64 @@ CRIME_SCENE = {
 }
 
 
+def build_crime_scene_analysis(scene: dict) -> dict:
+    subjects_by_id = {
+        subject["id"]: {
+            "id": subject["id"],
+            "label": subject["label"],
+            "desc": subject["description"],
+        }
+        for subject in scene["subjects"]
+    }
+    zones_by_id = {zone["id"]: zone["name"] for zone in scene["zones"]}
+
+    def resolve_subject(subject_value: str) -> dict:
+        tokens = [token.strip() for token in subject_value.split(",")]
+        known_subjects = [subjects_by_id[token] for token in tokens if token in subjects_by_id]
+
+        if len(known_subjects) == 1 and len(tokens) == 1:
+            return known_subjects[0]
+
+        if known_subjects:
+            return {
+                "id": "+".join(subject["id"] for subject in known_subjects),
+                "label": " + ".join(subject["label"] for subject in known_subjects),
+                "desc": "Coordinated activity involving multiple subjects",
+            }
+
+        return {
+            "id": "UNKNOWN",
+            "label": "Unknown Subject",
+            "desc": "Unidentified signature detected through thermal/depth evidence",
+        }
+
+    timeline_events = []
+    for event in scene["events"]:
+        timeline_events.append({
+            "type": event["type"],
+            "severity": event["severity"],
+            "summary": event["summary"],
+            "detail": event["detail"],
+            "sensors": event["sensors"],
+            "evidence_type": event["evidence_type"],
+            "timestamp": f"{scene['date']}T{event['time']}",
+            "subject": resolve_subject(event["subject"]),
+            "zone": zones_by_id.get(event["zone"], event["zone"]),
+            "confidence": event["confidence"],
+        })
+
+    return {
+        "events": timeline_events,
+        "report": generate_incident_report(timeline_events),
+        "case_data": DUMMY_CASE_DATA,
+    }
+
+
+@app.get("/api/analysis/demo")
+async def get_demo_analysis():
+    return build_crime_scene_analysis(CRIME_SCENE)
+
+
 @app.get("/api/case/scene")
 async def get_crime_scene():
     return CRIME_SCENE

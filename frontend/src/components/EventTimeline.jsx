@@ -33,7 +33,11 @@ export default function EventTimeline({ events, selectedEvent, onSelectEvent, ph
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <p className="text-detective-500 text-xs">
-              {phase === 'recording' ? 'Capturing events...' : 'Record footage to build timeline'}
+              {phase === 'analyzing'
+                ? 'Building timeline from uploaded footage...'
+                : phase === 'reviewing'
+                  ? 'Stop playback and analyze to build the timeline'
+                  : 'Upload footage to build timeline'}
             </p>
           </div>
         ) : (
