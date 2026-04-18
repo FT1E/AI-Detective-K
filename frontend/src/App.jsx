@@ -16,6 +16,7 @@ try {
 }
 
 const EMPTY_OAK = { connected: false, topics: [] }
+const API_BASE = import.meta.env.VITE_BACKEND_URL || ''
 
 function Dashboard() {
   const oakConnection = useDaiConnection ? useDaiConnection() : EMPTY_OAK
@@ -32,15 +33,17 @@ function Dashboard() {
 
   // Load dummy case data on mount
   useEffect(() => {
-    fetch('/api/case/dummy')
+    fetch(`${API_BASE}/api/case/dummy`)
       .then(res => res.json())
       .then(data => setCaseData(data))
       .catch(() => {})
   }, [])
 
   const connectWs = useCallback(() => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const ws = new WebSocket(`${protocol}//${window.location.host}/ws/events`)
+    const wsBase = API_BASE
+      ? API_BASE.replace(/^http/, 'ws')
+      : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`
+    const ws = new WebSocket(`${wsBase}/ws/events`)
 
     ws.onopen = () => {
       setBackendConnected(true)

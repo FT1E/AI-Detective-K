@@ -161,6 +161,8 @@ function TypingIndicator() {
   )
 }
 
+const API_BASE = import.meta.env.VITE_BACKEND_URL || ''
+
 export default function DetectiveChat({ caseData }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
@@ -188,7 +190,7 @@ export default function DetectiveChat({ caseData }) {
     setStreamingContent('')
 
     try {
-      const res = await fetch('/api/investigate', {
+      const res = await fetch(`${API_BASE}/api/investigate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
