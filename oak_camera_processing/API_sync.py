@@ -5,11 +5,24 @@ import cv2
 import json
 import base64
 import requests
+import datetime as dt
 
+
+"""
+for getting the data for last 600 frames access self.last_600_frames
+each element in list has format:
+{
+detections : <list of detected objects on frame>,
+rgb_base64 : <rgb frame encoded in base 64>,
+depth_basa64 : <depth frame encoded in base 64>,
+timestamp : <posix timestamp>
+}
+"""
 class ApiSyncNode(dai.node.HostNode):
     def __init__(self, api_url):
         dai.node.HostNode.__init__(self)
         self.api_url = api_url
+        self.last_600_frames = []
         self.sendProcessingToPipeline(True)
 
     def build(self, detections: dai.Node.Output, rgb: dai.Node.Output, depth: dai.Node.Output):
@@ -42,13 +55,19 @@ class ApiSyncNode(dai.node.HostNode):
         payload = {
             "detections": results,
             "rgb_base64": base64.b64encode(rgb_encoded).decode('utf-8'),
-            "depth_base64": base64.b64encode(depth_encoded).decode('utf-8')
+            "depth_base64": base64.b64encode(depth_encoded).decode('utf-8'),
+            "timestamp" : dt.datetime.timestamp
         }
 
         # Send to backend
         try:
             # Note: Network requests are slow; consider a lower FPS or a separate thread for production
-            requests.post(self.api_url, json=payload, timeout=0.5)
+            # requests.post(self.api_url, json=payload, timeout=0.5)
+
+            self.last_600_frames.append(payload)
+            while(len(self.last_600_frames) > 600):
+                self.last_600_frames.pop()
+
         except Exception as e:
             print(f"Sync API Error: {e}")
 
