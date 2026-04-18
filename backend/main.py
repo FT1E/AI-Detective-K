@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 from datetime import datetime, timedelta
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, Form, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -866,11 +866,22 @@ async def get_crime_scene():
 # Receives video/sensor data from the frontend and kicks off processing.
 
 @app.post("/api/vision-sync")
-async def vision_sync():
-    # TODO: accept uploaded file + mode + metadata
-    # TODO: store the file / forward to processing pipeline
-    # TODO: return a job/session ID so frontend can track progress
-    return {"status": "pending", "message": "Vision sync endpoint not yet implemented"}
+async def vision_sync(
+    file: UploadFile = File(...),
+    mode: str = Form(...),
+    meta: str = Form("{}"),
+):
+    # TODO: store the file (e.g. save to disk or object storage)
+    # TODO: forward to detection / analysis pipeline
+    # TODO: return a real job/session ID so frontend can poll progress
+
+    return {
+        "status": "received",
+        "filename": file.filename,
+        "mode": mode,
+        "size": file.size,
+        "content_type": file.content_type,
+    }
 
 
 if __name__ == "__main__":
