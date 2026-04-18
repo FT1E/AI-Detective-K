@@ -1,0 +1,19 @@
+services:
+  backend:
+    volumes:
+      - ./backend:/app           # live source mount for --reload
+    environment:
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+
+  frontend:
+    build:
+      target: builder            # stop at node stage, skip nginx
+    command: npm run dev -- --host 0.0.0.0 --port 5000
+    ports:
+      - "${FRONTEND_PORT:-5000}:5000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules        # anonymous volume keeps container node_modules intact
+    environment:
+      - VITE_API_URL=http://localhost:8000
