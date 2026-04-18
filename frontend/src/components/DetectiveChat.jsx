@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { sendInvestigateMessage } from "../lib/api";
 
 function MessageBubble({ message }) {
   const isAssistant = message.role === "assistant";
@@ -216,8 +217,6 @@ function TypingIndicator() {
   );
 }
 
-const API_BASE = import.meta.env.VITE_BACKEND_URL || "";
-
 export default function DetectiveChat({ caseData }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -245,19 +244,7 @@ export default function DetectiveChat({ caseData }) {
     setStreamingContent("");
 
     try {
-      const res = await fetch(`${API_BASE}/api/investigate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          case_data: caseData,
-          messages: newMessages
-            .filter((m) => m.role !== "system")
-            .map((m) => ({
-              role: m.role,
-              content: m.content,
-            })),
-        }),
-      });
+      const res = await sendInvestigateMessage(caseData, newMessages);
 
       const contentType = res.headers.get("content-type") || "";
 

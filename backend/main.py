@@ -440,6 +440,466 @@ async def websocket_events(websocket: WebSocket):
         recording = False
 
 
+
+# --- Gemini Detective Chat ---
+
+DUMMY_CASE_DATA = {
+    "scene_data": {
+        "location": "Belmont Industrial Park — Warehouse 14, East Wing",
+        "time": "23:40",
+        "date": "2026-04-17",
+        "environment": "dark, rain, 14°C exterior, 17°C interior",
+        "objects_detected": [
+            "person (S-1, male, dark jacket, 182cm)",
+            "person (S-3, male, hoodie, face obscured, 175cm)",
+            "concealed heat source (36.2°C behind shelving unit)",
+            "dark bag (35x25cm, ambient temp 19.2°C)",
+            "broken fire exit seal",
+            "shelving unit",
+            "stacked crates",
+        ],
+        "thermal_activity": {
+            "S-1_baseline": "36.4°C (stable throughout)",
+            "S-3_baseline": "37.1°C (elevated on entry, peaked 37.8°C post-exchange)",
+            "concealed_source": "36.2°C behind shelving — invisible on RGB",
+            "deposited_object": "19.2°C — matches ambient, not recently body-carried",
+            "hand_transfer": "S-3 right hand +0.4°C transient spike at 23:43:30",
+        },
+        "depth_data": {
+            "S-1_height": "182cm",
+            "S-3_height": "175cm",
+            "concealment_pocket": "0.8m gap behind shelving unit, profile matches crouching adult",
+            "deposited_object_size": "35cm x 25cm x 15cm, ground level",
+            "hand_movement": "tracked at 1.1m height during 8-second interaction window",
+            "door_swing": "fire exit door opened at 23:38:15, depth detected arc",
+        },
+        "movement": {
+            "S-1_entry": "side loading dock door (not main entrance), 23:36:04",
+            "S-1_path": "avoided 2 camera cones — 12m detour, requires prior knowledge",
+            "S-1_loitering": "stationary in Storage Bay 3 for 4m 23s, facing shelving",
+            "S-1_exit": "same loading dock, 7.1 km/h, controlled pace, 36.5°C",
+            "S-3_entry": "rear fire exit, 23:38:15, irregular stride (stress)",
+            "S-3_erratic": "7 direction changes in 12 seconds, 4.2x above baseline, no obstacles",
+            "S-3_exit": "rear fire exit, 9.2 km/h (3.7x baseline), panicked, 37.5°C",
+            "exit_gap": "98 seconds between S-3 and S-1 departures — staggered",
+        },
+    },
+    "evidence": [
+        {"id": "E-01", "time": "23:36:04", "type": "entry", "subject": "S-1", "sensor": "rgb+depth+thermal",
+         "detail": "S-1 entered via side loading dock door. Depth: 182cm. Thermal: 36.4°C. Avoided main entrance."},
+        {"id": "E-02", "time": "23:37:22", "type": "camera_avoidance", "subject": "S-1", "sensor": "thermal+depth",
+         "detail": "S-1 took 12m detour around 2 primary camera coverage cones. Only detected by thermal peripheral sensor."},
+        {"id": "E-03", "time": "23:38:15", "type": "entry", "subject": "S-3", "sensor": "rgb+depth+thermal",
+         "detail": "S-3 entered through rear fire exit. Thermal: 37.1°C (elevated). Irregular stride pattern. Fire exit seal broken."},
+        {"id": "E-04", "time": "23:39:50", "type": "loitering", "subject": "S-1", "sensor": "thermal+depth",
+         "detail": "S-1 stationary in Storage Bay 3 for 4m 23s. Near-total darkness — RGB useless. Thermal confirmed living human. Facing shelving unit."},
+        {"id": "E-05", "time": "23:41:08", "type": "concealed_presence", "subject": "unknown", "sensor": "thermal+depth",
+         "detail": "36.2°C heat source behind shelving unit. Invisible on RGB. Depth: 0.8m concealment pocket. Profile consistent with crouching adult ~170cm. 0.2°C below S-1 baseline."},
+        {"id": "E-06", "time": "23:43:30", "type": "physical_exchange", "subject": "S-1+S-3", "sensor": "rgb+depth+thermal",
+         "detail": "S-1 and S-3 converged <0.4m for 8 seconds. Depth: hand-level movement at 1.1m. Post-contact: S-3 right hand +0.4°C. Immediate separation in opposite directions."},
+        {"id": "E-07", "time": "23:44:15", "type": "stress_behavior", "subject": "S-3", "sensor": "rgb+thermal+depth",
+         "detail": "7 direction reversals in 12 seconds (4.2x baseline). Thermal: 37.8°C. Depth confirms no obstacles — purely behavioral. Speed oscillating 3.2-4.1 km/h."},
+        {"id": "E-08", "time": "23:45:02", "type": "object_deposited", "subject": "S-1", "sensor": "depth+rgb+thermal",
+         "detail": "New object on ground: 35x25x15cm dark bag. Thermal: 19.2°C (ambient). NOT recently body-carried (would be 30-34°C). Pre-positioned or insulated."},
+        {"id": "E-09", "time": "23:46:30", "type": "flight", "subject": "S-3", "sensor": "rgb+depth+thermal",
+         "detail": "S-3 exited via rear fire exit at 9.2 km/h (3.7x baseline). Thermal: 37.5°C. Did not look back. Door left ajar."},
+        {"id": "E-10", "time": "23:48:10", "type": "controlled_exit", "subject": "S-1", "sensor": "rgb+depth+thermal",
+         "detail": "S-1 exited via loading dock at 7.1 km/h. Thermal: 36.5°C (near baseline). Controlled, deliberate. 98s after S-3 — staggered departure."},
+    ],
+    "questions_asked": [],
+    "answers": [],
+    "hypotheses": [],
+}
+
+
+class ChatMessage(BaseModel):
+    role: str  # "user" or "assistant"
+    content: str
+
+
+class InvestigateRequest(BaseModel):
+    case_data: dict | None = None
+    messages: list[ChatMessage] = []
+
+
+@app.post("/api/investigate")
+async def investigate(req: InvestigateRequest):
+    case_data = req.case_data or DUMMY_CASE_DATA
+
+    if not GEMINI_API_KEY:
+        # Fallback: return a static detective response when no API key
+        return _fallback_response(case_data, req.messages)
+
+    model = genai.GenerativeModel(
+        model_name="gemini-2.5-flash",
+        system_instruction=DETECTIVE_SYSTEM_PROMPT,
+    )
+
+    # Build conversation history
+    gemini_history = []
+    for msg in req.messages:
+        gemini_history.append({
+            "role": "user" if msg.role == "user" else "model",
+            "parts": [msg.content],
+        })
+
+    chat = model.start_chat(history=gemini_history)
+
+    # Build the prompt
+    if not req.messages:
+        # First message — send the full case data
+        prompt = f"""New case file has been opened. Here is the complete sensor data from the incident:
+
+```json
+{json.dumps(case_data, indent=2)}
+```
+
+Analyze this case. Start with your initial assessment, identify the most critical findings, and ask me 2-3 targeted questions to guide the investigation."""
+    else:
+        # Continuation — the last user message is the prompt
+        prompt = req.messages[-1].content
+        # Remove it from history since we'll send it as the new message
+        if gemini_history and gemini_history[-1]["role"] == "user":
+            gemini_history.pop()
+            chat = model.start_chat(history=gemini_history)
+
+    async def generate():
+        try:
+            response = chat.send_message(prompt, stream=True)
+            for chunk in response:
+                if chunk.text:
+                    yield f"data: {json.dumps({'type': 'chunk', 'content': chunk.text})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
+
+
+def _fallback_response(case_data, messages):
+    """Static detective responses when Gemini API key is not configured."""
+    scene = case_data.get('scene_data', {})
+    if not messages:
+        content = f"""## Initial Case Assessment
+
+**Location:** {scene.get('location', 'Unknown')} | **Time:** {scene.get('time', 'Unknown')} | **Conditions:** {scene.get('environment', 'Unknown')}
+
+---
+
+This is a significant case. Let me walk through what the sensors captured.
+
+**Critical Finding #1 — Concealed Individual (23:41:08)**
+Thermal imaging detected a 36.2°C heat source behind a shelving unit in the storage area that was *completely invisible* on RGB cameras. Depth mapping confirms a 0.8m concealment pocket. This is the kind of detection that separates our system from standard CCTV — whoever was hiding there knew where the cameras were, but didn't account for thermal.
+
+**Critical Finding #2 — The Exchange (23:43:30)**
+S-1 and S-3 converged for exactly 8 seconds with hand-level movement tracked by depth sensors. The thermal transfer on S-3's right hand post-contact is a strong indicator of a physical handoff. The immediate separation in opposite directions is textbook covert exchange.
+
+**Critical Finding #3 — Camera Avoidance (23:37:22)**
+S-1 deliberately navigated around primary camera positions on entry. This suggests prior reconnaissance — they knew the layout. Only our thermal peripheral sensors caught this.
+
+---
+
+**Questions for the investigator:**
+
+1. **The concealed person at 23:41** — was this S-1 waiting before S-3 arrived, or is this potentially a third individual? The thermal signature (36.2°C) is slightly lower than S-1's baseline (36.4°C). Can we check if there were any other entry detections we might have missed?
+
+2. **The deposited object (23:45:02)** — the bag reads at ambient temperature (19.2°C), meaning it wasn't recently carried on-body. This is unusual. Was it pre-positioned? Can we check depth baselines for this zone from earlier in the day?
+
+3. **Exit pattern** — S-3 fled at 9.2 km/h with elevated thermal (stress), while S-1 left calmly at 7.1 km/h via a different exit. This asymmetry suggests S-1 was in control of the situation. Do we have any exterior sensor coverage to track their departure directions?"""
+    else:
+        responses = [
+            """Good observation. Let me dig deeper into that.
+
+The thermal data supports your thinking here. If we cross-reference the timeline, there's a 2-minute gap between S-1's arrival in the storage area (23:39:50) and the concealed presence detection (23:41:08). That's enough time for S-1 to have positioned themselves — but the 0.2°C temperature difference is nagging at me.
+
+**New hypothesis:** There may have been a third person already in position before our observation window began. The lower thermal reading could indicate they'd been stationary long enough to cool slightly from physical activity.
+
+**I'd recommend checking:**
+- Depth baseline scans from 23:00-23:35 for Zone C — any anomalies would confirm pre-positioning
+- Thermal sweep of the entire storage area — are there any other heat signatures we haven't flagged?
+
+What are your thoughts on the deposited object? The ambient temperature reading is the piece that bothers me most.""",
+
+            """That's a critical connection. Let me update my working theory.
+
+**Revised Timeline Reconstruction:**
+
+| Time | Event | Confidence |
+|------|-------|------------|
+| Pre-23:35 | Third individual enters and conceals in Zone C | 72% |
+| 23:36 | S-1 enters via side door, avoids cameras | Confirmed |
+| 23:38 | S-3 enters via fire exit, already showing stress | Confirmed |
+| 23:39-41 | S-1 moves to storage, possible contact with hidden person | 68% |
+| 23:43 | Handoff between S-1 and S-3 | 89% |
+| 23:45 | S-1 deposits pre-staged bag | 81% |
+| 23:46-48 | Both exit separately — S-3 panicked, S-1 controlled | Confirmed |
+
+**The bag is the key.** If it was pre-positioned (ambient temp confirms it wasn't recently carried), then this was *planned in advance*. Someone placed that bag hours ago, and S-1 knew exactly where to find it.
+
+**Next steps I'd recommend:**
+1. Pull all sensor data from Zone C for the past 24 hours
+2. Check if the concealed person ever left — or if they're *still there*
+3. Cross-reference S-1's entry path with historical traffic patterns — has this exact route been used before?""",
+
+            """We're building a strong picture now. Let me synthesize everything.
+
+**Working Theory (Confidence: 78%):**
+This was a coordinated operation involving at least 2, possibly 3 individuals. The warehouse was pre-scouted (camera avoidance confirms this). An item was pre-staged in the storage area. S-1 acted as the primary operator — calm, deliberate, familiar with the space. S-3 was secondary — showed signs of stress throughout, possibly coerced or inexperienced.
+
+The multi-modal sensor fusion was decisive here. Standard CCTV would have captured entry/exit and maybe the storage meeting. But the concealed presence, the hand-level exchange detail, and the thermal stress indicators — those are what transform this from "two people in a warehouse" to "coordinated covert operation."
+
+**Final recommendation:** This case warrants immediate physical investigation of Zone C, particularly behind the shelving unit where the concealed presence was detected. The deposited bag should be treated as priority evidence. All sensor recordings should be preserved for the full 24-hour window.""",
+        ]
+        idx = min(len(messages) // 2, len(responses) - 1)
+        content = responses[idx]
+
+    return {"content": content}
+
+
+@app.get("/api/case/dummy")
+async def get_dummy_case():
+    return DUMMY_CASE_DATA
+
+
+# --- Pre-built crime scene with simulated OAK sensor data ---
+
+CRIME_SCENE = {
+    "case_id": "DK-20260418-7742",
+    "location": "Belmont Industrial Park — Warehouse 14, East Wing",
+    "time_of_incident": "23:40",
+    "date": "2026-04-17",
+    "observation_window": {"start": "2026-04-17T23:35:12", "end": "2026-04-17T23:48:47"},
+    "environment": {
+        "lighting": "No overhead lighting. Emergency exit sign only. Near-total darkness in Zone C.",
+        "weather": "Light rain, 14°C exterior, 17°C interior",
+        "visibility": "RGB effective only in Zones A, D (exit signs). Thermal/depth critical for B, C.",
+    },
+    "zones": [
+        {"id": "zone-a", "name": "Loading Dock Entrance", "x": 10, "y": 60, "w": 25, "h": 30, "lighting": "dim"},
+        {"id": "zone-b", "name": "Main Corridor", "x": 35, "y": 40, "w": 15, "h": 45, "lighting": "dark"},
+        {"id": "zone-c", "name": "Storage Bay 3", "x": 55, "y": 20, "w": 30, "h": 50, "lighting": "none"},
+        {"id": "zone-d", "name": "Rear Fire Exit", "x": 70, "y": 75, "w": 20, "h": 20, "lighting": "exit-sign"},
+    ],
+    "objects": [
+        {"id": "obj-1", "type": "shelving_unit", "x": 72, "y": 35, "w": 8, "h": 18, "label": "Shelving Unit"},
+        {"id": "obj-2", "type": "deposited_bag", "x": 62, "y": 52, "w": 4, "h": 3, "label": "Dark Bag", "temp": 19.2, "appeared_at": "23:45:02"},
+        {"id": "obj-3", "type": "forklift", "x": 20, "y": 70, "w": 8, "h": 5, "label": "Parked Forklift"},
+        {"id": "obj-4", "type": "crates", "x": 58, "y": 25, "w": 10, "h": 8, "label": "Stacked Crates"},
+    ],
+    "subjects": [
+        {
+            "id": "S-1", "label": "Subject Alpha",
+            "description": "Male, dark jacket, approx 182cm, athletic build",
+            "thermal_baseline": 36.4,
+            "path": [
+                {"x": 12, "y": 75, "time": "23:36:04", "zone": "zone-a", "temp": 36.4, "speed": 1.2},
+                {"x": 18, "y": 68, "time": "23:36:30", "zone": "zone-a", "temp": 36.4, "speed": 0.8},
+                {"x": 25, "y": 55, "time": "23:37:22", "zone": "zone-a", "temp": 36.5, "speed": 1.4},
+                {"x": 38, "y": 48, "time": "23:38:00", "zone": "zone-b", "temp": 36.4, "speed": 1.1},
+                {"x": 42, "y": 42, "time": "23:39:10", "zone": "zone-b", "temp": 36.4, "speed": 0.9},
+                {"x": 60, "y": 38, "time": "23:39:50", "zone": "zone-c", "temp": 36.4, "speed": 0.0},
+                {"x": 60, "y": 38, "time": "23:43:20", "zone": "zone-c", "temp": 36.5, "speed": 0.0},
+                {"x": 62, "y": 40, "time": "23:43:30", "zone": "zone-c", "temp": 36.6, "speed": 0.3},
+                {"x": 60, "y": 38, "time": "23:43:38", "zone": "zone-c", "temp": 36.5, "speed": 0.0},
+                {"x": 62, "y": 50, "time": "23:45:02", "zone": "zone-c", "temp": 36.5, "speed": 0.5},
+                {"x": 58, "y": 55, "time": "23:46:00", "zone": "zone-c", "temp": 36.5, "speed": 1.8},
+                {"x": 45, "y": 60, "time": "23:47:00", "zone": "zone-b", "temp": 36.5, "speed": 2.0},
+                {"x": 22, "y": 72, "time": "23:48:10", "zone": "zone-a", "temp": 36.5, "speed": 2.0},
+            ],
+        },
+        {
+            "id": "S-3", "label": "Subject Gamma",
+            "description": "Male, hoodie, face obscured, approx 175cm, nervous gait",
+            "thermal_baseline": 37.1,
+            "path": [
+                {"x": 75, "y": 88, "time": "23:38:15", "zone": "zone-d", "temp": 37.1, "speed": 1.5},
+                {"x": 68, "y": 78, "time": "23:38:45", "zone": "zone-d", "temp": 37.2, "speed": 1.8},
+                {"x": 48, "y": 55, "time": "23:40:00", "zone": "zone-b", "temp": 37.0, "speed": 1.3},
+                {"x": 55, "y": 42, "time": "23:42:00", "zone": "zone-c", "temp": 37.1, "speed": 0.8},
+                {"x": 61, "y": 40, "time": "23:43:28", "zone": "zone-c", "temp": 37.2, "speed": 1.0},
+                {"x": 63, "y": 40, "time": "23:43:30", "zone": "zone-c", "temp": 37.4, "speed": 0.2},
+                {"x": 63, "y": 42, "time": "23:43:38", "zone": "zone-c", "temp": 37.6, "speed": 2.5},
+                {"x": 50, "y": 50, "time": "23:44:00", "zone": "zone-b", "temp": 37.5, "speed": 3.2},
+                {"x": 45, "y": 55, "time": "23:44:08", "zone": "zone-b", "temp": 37.8, "speed": 3.8},
+                {"x": 48, "y": 50, "time": "23:44:12", "zone": "zone-b", "temp": 37.8, "speed": 4.1},
+                {"x": 42, "y": 58, "time": "23:44:15", "zone": "zone-b", "temp": 37.8, "speed": 3.5},
+                {"x": 72, "y": 82, "time": "23:46:00", "zone": "zone-d", "temp": 37.6, "speed": 2.6},
+                {"x": 78, "y": 90, "time": "23:46:30", "zone": "zone-d", "temp": 37.5, "speed": 2.6},
+            ],
+        },
+    ],
+    "concealed_presence": {
+        "x": 74, "y": 38, "temp": 36.2, "detected_at": "23:41:08",
+        "zone": "zone-c", "behind": "obj-1",
+        "depth_pocket": "0.8m gap behind shelving",
+        "note": "Invisible on RGB. Only thermal + depth detected this.",
+    },
+    "events": [
+        {
+            "id": "ev-01", "time": "23:36:04", "type": "entry_detected", "severity": "low",
+            "zone": "zone-a", "subject": "S-1",
+            "summary": "Subject Alpha entered via loading dock side door",
+            "detail": "RGB captured silhouette at entrance. Depth sensor measured height: 182cm. Thermal baseline recorded: 36.4°C. Subject avoided main entrance — used manual dock door instead.",
+            "sensors": ["rgb", "depth", "thermal"], "evidence_type": "movement", "confidence": 0.94,
+            "oak_data": {"bbox": [10, 55, 18, 85], "depth_m": 3.2, "temp": 36.4},
+        },
+        {
+            "id": "ev-02", "time": "23:37:22", "type": "path_avoidance", "severity": "medium",
+            "zone": "zone-a", "subject": "S-1",
+            "summary": "S-1 deliberately avoided 2 primary camera positions",
+            "detail": "Trajectory analysis: subject took a 12m detour around camera coverage cones. Path requires prior knowledge of camera placement. Only detected by thermal peripheral sensor at edge of Zone A.",
+            "sensors": ["thermal", "depth"], "evidence_type": "behavioral", "confidence": 0.88,
+            "oak_data": {"bbox": [22, 50, 30, 65], "depth_m": 5.1, "temp": 36.5},
+        },
+        {
+            "id": "ev-03", "time": "23:38:15", "type": "entry_detected", "severity": "low",
+            "zone": "zone-d", "subject": "S-3",
+            "summary": "Subject Gamma entered through rear fire exit",
+            "detail": "Fire exit opened (depth detected door swing). Subject entered with elevated thermal: 37.1°C — above normal baseline, consistent with recent physical exertion or stress. Gait analysis: irregular stride pattern.",
+            "sensors": ["rgb", "depth", "thermal"], "evidence_type": "movement", "confidence": 0.92,
+            "oak_data": {"bbox": [70, 80, 80, 95], "depth_m": 2.8, "temp": 37.1},
+        },
+        {
+            "id": "ev-04", "time": "23:39:50", "type": "loitering", "severity": "medium",
+            "zone": "zone-c", "subject": "S-1",
+            "summary": "S-1 stationary in Storage Bay 3 for 4m 23s",
+            "detail": "Subject stopped moving in near-total darkness (RGB useless). Thermal: consistent 36.4°C confirming living presence. Depth profile unchanged across 340 frames — not an abandoned object. Position: facing shelving unit obj-1.",
+            "sensors": ["thermal", "depth"], "evidence_type": "behavioral", "confidence": 0.91,
+            "oak_data": {"bbox": [56, 30, 64, 50], "depth_m": 1.5, "temp": 36.4},
+        },
+        {
+            "id": "ev-05", "time": "23:41:08", "type": "concealed_presence", "severity": "high",
+            "zone": "zone-c", "subject": "Unknown",
+            "summary": "Hidden individual detected behind shelving — thermal only",
+            "detail": "36.2°C heat source detected behind shelving unit (obj-1). Completely invisible on RGB camera. Depth mapping reveals 0.8m concealment pocket between shelving and wall. Heat signature profile: crouching adult, approximately 170cm. Thermal is 0.2°C below S-1's baseline — possible third individual.",
+            "sensors": ["thermal", "depth"], "evidence_type": "spatial", "confidence": 0.87,
+            "oak_data": {"bbox": [70, 30, 78, 45], "depth_m": 0.8, "temp": 36.2, "rgb_visible": False},
+        },
+        {
+            "id": "ev-06", "time": "23:43:30", "type": "suspicious_interaction", "severity": "high",
+            "zone": "zone-c", "subject": "S-1, S-3",
+            "summary": "8-second close-proximity exchange between S-1 and S-3",
+            "detail": "Subjects converged to <0.4m separation for exactly 8 seconds. Depth sensors tracked hand-level movement at 1.1m height during contact window. Post-separation thermal: S-3's right hand region showed transient temperature increase (+0.4°C) consistent with receiving a recently body-warmed object. Immediate divergence in opposite directions.",
+            "sensors": ["rgb", "depth", "thermal"], "evidence_type": "interpersonal", "confidence": 0.93,
+            "oak_data": {"bbox": [58, 35, 66, 48], "depth_m": 1.2, "temp_s1": 36.6, "temp_s3": 37.4, "hand_movement": True},
+        },
+        {
+            "id": "ev-07", "time": "23:44:15", "type": "erratic_movement", "severity": "high",
+            "zone": "zone-b", "subject": "S-3",
+            "summary": "S-3: 7 direction changes in 12 seconds — stress indicator",
+            "detail": "Post-exchange, S-3 exhibited erratic movement: 7 direction reversals in 12 seconds (4.2x above pedestrian baseline). Thermal spiked to 37.8°C — physiological stress response. Depth tracking confirms no physical obstacles — movement was purely behavioral. Speed oscillated between 3.2 and 4.1 km/h.",
+            "sensors": ["rgb", "thermal", "depth"], "evidence_type": "behavioral", "confidence": 0.95,
+            "oak_data": {"bbox": [40, 48, 52, 62], "depth_m": 4.5, "temp": 37.8, "direction_changes": 7},
+        },
+        {
+            "id": "ev-08", "time": "23:45:02", "type": "object_deposited", "severity": "medium",
+            "zone": "zone-c", "subject": "S-1",
+            "summary": "Dark bag deposited at ground level in storage area",
+            "detail": "Depth map delta: new object appeared (35cm x 25cm x 15cm) at ground level near crates (obj-4). RGB: dark-colored bag/package. Thermal: 19.2°C — matches ambient interior temperature. Object was NOT recently body-carried (would read ~30-34°C). Suggests pre-positioning hours earlier, or insulated container.",
+            "sensors": ["depth", "rgb", "thermal"], "evidence_type": "physical", "confidence": 0.90,
+            "oak_data": {"bbox": [60, 48, 65, 55], "depth_m": 0.3, "temp": 19.2, "size_cm": [35, 25, 15]},
+        },
+        {
+            "id": "ev-09", "time": "23:46:30", "type": "rapid_exit", "severity": "medium",
+            "zone": "zone-d", "subject": "S-3",
+            "summary": "S-3 fled at 9.2 km/h through rear fire exit",
+            "detail": "Subject Gamma accelerated to 9.2 km/h (3.7x pedestrian baseline) toward rear fire exit. Thermal remained elevated: 37.5°C. Used same exit as entry. Did not look back (head orientation tracked via depth). Door left ajar.",
+            "sensors": ["rgb", "depth", "thermal"], "evidence_type": "movement", "confidence": 0.96,
+            "oak_data": {"bbox": [72, 82, 82, 96], "depth_m": 6.2, "temp": 37.5, "speed_kmh": 9.2},
+        },
+        {
+            "id": "ev-10", "time": "23:48:10", "type": "rapid_exit", "severity": "medium",
+            "zone": "zone-a", "subject": "S-1",
+            "summary": "S-1 exited calmly at 7.1 km/h via loading dock — different exit",
+            "detail": "Subject Alpha departed via original entry point (loading dock). Speed: 7.1 km/h — elevated but controlled. Thermal: 36.5°C — near baseline, no stress indicators. Took deliberate route. 98-second gap between S-3 and S-1 exits suggests coordinated staggered departure.",
+            "sensors": ["rgb", "depth", "thermal"], "evidence_type": "movement", "confidence": 0.94,
+            "oak_data": {"bbox": [15, 68, 25, 82], "depth_m": 4.0, "temp": 36.5, "speed_kmh": 7.1},
+        },
+    ],
+    "sensor_summary": {
+        "rgb_detections": 7,
+        "thermal_detections": 10,
+        "depth_detections": 10,
+        "thermal_only_events": 2,
+        "note": "Concealed presence and camera avoidance only detectable via thermal+depth. Standard CCTV would have missed 3 of 10 events entirely, and 2 more would lack critical detail."
+    },
+}
+
+
+def build_crime_scene_analysis(scene: dict) -> dict:
+    subjects_by_id = {
+        subject["id"]: {
+            "id": subject["id"],
+            "label": subject["label"],
+            "desc": subject["description"],
+        }
+        for subject in scene["subjects"]
+    }
+    zones_by_id = {zone["id"]: zone["name"] for zone in scene["zones"]}
+
+    def resolve_subject(subject_value: str) -> dict:
+        tokens = [token.strip() for token in subject_value.split(",")]
+        known_subjects = [subjects_by_id[token] for token in tokens if token in subjects_by_id]
+
+        if len(known_subjects) == 1 and len(tokens) == 1:
+            return known_subjects[0]
+
+        if known_subjects:
+            return {
+                "id": "+".join(subject["id"] for subject in known_subjects),
+                "label": " + ".join(subject["label"] for subject in known_subjects),
+                "desc": "Coordinated activity involving multiple subjects",
+            }
+
+        return {
+            "id": "UNKNOWN",
+            "label": "Unknown Subject",
+            "desc": "Unidentified signature detected through thermal/depth evidence",
+        }
+
+    timeline_events = []
+    for event in scene["events"]:
+        timeline_events.append({
+            "type": event["type"],
+            "severity": event["severity"],
+            "summary": event["summary"],
+            "detail": event["detail"],
+            "sensors": event["sensors"],
+            "evidence_type": event["evidence_type"],
+            "timestamp": f"{scene['date']}T{event['time']}",
+            "subject": resolve_subject(event["subject"]),
+            "zone": zones_by_id.get(event["zone"], event["zone"]),
+            "confidence": event["confidence"],
+        })
+
+    return {
+        "events": timeline_events,
+        "report": generate_incident_report(timeline_events),
+        "case_data": DUMMY_CASE_DATA,
+    }
+
+
+@app.get("/api/analysis/demo")
+async def get_demo_analysis():
+    return build_crime_scene_analysis(CRIME_SCENE)
+
+
+@app.get("/api/case/scene")
+async def get_crime_scene():
+    return CRIME_SCENE
+
+
+# --- Vision Sync Trigger ---
+# Receives video/sensor data from the frontend and kicks off processing.
+
+@app.post("/api/vision-sync")
+async def vision_sync():
+    # TODO: accept uploaded file + mode + metadata
+    # TODO: store the file / forward to processing pipeline
+    # TODO: return a job/session ID so frontend can track progress
+    return {"status": "pending", "message": "Vision sync endpoint not yet implemented"}
+
+
 if __name__ == "__main__":
     import os
     import uvicorn
