@@ -3,6 +3,7 @@ import FootageReview from "./components/FootageReview";
 import IncidentReport from "./components/IncidentReport";
 import EventTimeline from "./components/EventTimeline";
 import DetectiveChat from "./components/DetectiveChat";
+import { getApiUrl, getWebSocketUrl } from "./lib/backend";
 
 // OAK integration is optional — app works without it
 let DepthAIContext, useDaiConnection;
@@ -16,8 +17,6 @@ try {
 }
 
 const EMPTY_OAK = { connected: false, topics: [] };
-const API_BASE = import.meta.env.VITE_BACKEND_URL || "";
-
 function Dashboard() {
   const oakConnection = useDaiConnection ? useDaiConnection() : EMPTY_OAK;
 
@@ -33,7 +32,7 @@ function Dashboard() {
 
   // Load dummy case data on mount
   useEffect(() => {
-    fetch(`${API_BASE}/api/case/dummy`)
+    fetch(getApiUrl("/case/dummy"))
       .then(async (res) => {
         const ct = res.headers.get("content-type") || "";
         if (!res.ok) {
@@ -62,10 +61,7 @@ function Dashboard() {
   }, []);
 
   const connectWs = useCallback(() => {
-    const wsBase = API_BASE
-      ? API_BASE.replace(/^http/, "ws")
-      : `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`;
-    const ws = new WebSocket(`${wsBase}/ws/events`);
+    const ws = new WebSocket(getWebSocketUrl("/events"));
 
     ws.onopen = () => {
       setBackendConnected(true);

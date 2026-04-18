@@ -10,6 +10,11 @@ Frontend:
 - cd frontend
 - npm install
 - npm run dev
+
+Frontend backend URL:
+- Set `VITE_BACKEND_URL` to either the backend origin (`https://your-api.example.com`) or a mounted base path (`https://your-api.example.com/backend`).
+- Values that already include `/api` also work, for example `https://your-api.example.com/api` or `https://your-api.example.com/backend/api`.
+- After changing any `VITE_` env var, rebuild and redeploy the frontend. Vite bakes those values into the production bundle at build time.
   
 (pip install \<library_name\>)
 Python libraries to install: 
