@@ -1,68 +1,126 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import FootageReview from './components/FootageReview'
-import IncidentReport from './components/IncidentReport'
-import EventTimeline from './components/EventTimeline'
+import { useState, useEffect, useRef, useCallback } from "react";
+import FootageReview from "./components/FootageReview";
+import IncidentReport from "./components/IncidentReport";
+import EventTimeline from "./components/EventTimeline";
+import DetectiveChat from "./components/DetectiveChat";
 
-export default function App() {
-  const [recording, setRecording] = useState(false)
-  const [events, setEvents] = useState([])
-  const [report, setReport] = useState(null)
-  const [analyzing, setAnalyzing] = useState(false)
-  const [viewMode, setViewMode] = useState('rgb')
-  const [selectedEvent, setSelectedEvent] = useState(null)
-  const wsRef = useRef(null)
-  const [connected, setConnected] = useState(false)
+// OAK integration is optional — app works without it
+let DepthAIContext, useDaiConnection;
+try {
+  const oak = await import("@luxonis/depthai-viewer-common");
+  DepthAIContext = oak.DepthAIContext;
+  useDaiConnection = oak.useDaiConnection;
+  await import("@luxonis/depthai-viewer-common/styles");
+} catch {
+  // OAK packages not available — run without camera integration
+}
+
+const EMPTY_OAK = { connected: false, topics: [] };
+const API_BASE = import.meta.env.VITE_BACKEND_URL || "";
+
+function Dashboard() {
+  const oakConnection = useDaiConnection ? useDaiConnection() : EMPTY_OAK;
+
+  const [recording, setRecording] = useState(false);
+  const [events, setEvents] = useState([]);
+  const [report, setReport] = useState(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [viewMode, setViewMode] = useState("rgb");
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [caseData, setCaseData] = useState(null);
+  const wsRef = useRef(null);
+  const [backendConnected, setBackendConnected] = useState(false);
+
+  // Load dummy case data on mount
+  useEffect(() => {
+    fetch(`${API_BASE}/api/case/dummy`)
+      .then(async (res) => {
+        const ct = res.headers.get("content-type") || "";
+        if (!res.ok) {
+          // try to read a short snippet if it's HTML or plain text
+          const text = await res.text().catch(() => "");
+          console.error(
+            `Failed to load /api/case/dummy: ${res.status} ${res.statusText}\n${text.slice(0, 200)}`,
+          );
+          return null;
+        }
+        if (!ct.includes("application/json")) {
+          const text = await res.text().catch(() => "");
+          console.error(
+            `Expected JSON from /api/case/dummy but got ${ct}. Response snippet:\n${text.slice(0, 200)}`,
+          );
+          return null;
+        }
+        return res.json();
+      })
+      .then((data) => {
+        if (data) setCaseData(data);
+      })
+      .catch((err) => {
+        console.error("Error fetching dummy case:", err);
+      });
+  }, []);
 
   const connectWs = useCallback(() => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const ws = new WebSocket(`${protocol}//${window.location.host}/ws/events`)
+    const wsBase = API_BASE
+      ? API_BASE.replace(/^http/, "ws")
+      : `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`;
+    const ws = new WebSocket(`${wsBase}/ws/events`);
 
     ws.onopen = () => {
-      setConnected(true)
-      wsRef.current = ws
-    }
+      setBackendConnected(true);
+      wsRef.current = ws;
+    };
 
     ws.onmessage = (e) => {
-      const msg = JSON.parse(e.data)
-      if (msg.type === 'status') {
-        setRecording(msg.recording)
+      const msg = JSON.parse(e.data);
+      if (msg.type === "status") {
+        setRecording(msg.recording);
         if (!msg.recording && events.length > 0) {
-          setAnalyzing(true)
+          setAnalyzing(true);
         }
-      } else if (msg.type === 'event') {
-        setEvents((prev) => [...prev, msg.data])
-      } else if (msg.type === 'report') {
-        setReport(msg.data)
-        setAnalyzing(false)
+      } else if (msg.type === "event") {
+        setEvents((prev) => [...prev, msg.data]);
+      } else if (msg.type === "report") {
+        setReport(msg.data);
+        setAnalyzing(false);
       }
-    }
+    };
 
     ws.onclose = () => {
-      setConnected(false)
-      wsRef.current = null
-      setTimeout(connectWs, 2000)
-    }
+      setBackendConnected(false);
+      wsRef.current = null;
+      setTimeout(connectWs, 2000);
+    };
 
-    ws.onerror = () => ws.close()
-  }, [])
+    ws.onerror = () => ws.close();
+  }, []);
 
   useEffect(() => {
-    connectWs()
-    return () => wsRef.current?.close()
-  }, [connectWs])
+    connectWs();
+    return () => wsRef.current?.close();
+  }, [connectWs]);
 
   const toggleRecording = () => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       if (!recording) {
-        setEvents([])
-        setReport(null)
-        setSelectedEvent(null)
+        setEvents([]);
+        setReport(null);
+        setSelectedEvent(null);
       }
-      wsRef.current.send(JSON.stringify({ action: recording ? 'stop' : 'start' }))
+      wsRef.current.send(
+        JSON.stringify({ action: recording ? "stop" : "start" }),
+      );
     }
-  }
+  };
 
-  const phase = report ? 'report' : recording ? 'recording' : analyzing ? 'analyzing' : 'idle'
+  const phase = report
+    ? "report"
+    : recording
+      ? "recording"
+      : analyzing
+        ? "analyzing"
+        : "idle";
 
   return (
     <div className="h-screen flex flex-col bg-detective-900">
@@ -75,7 +133,9 @@ export default function App() {
           <h1 className="text-lg font-semibold tracking-tight">
             AI Detective <span className="text-detective-accent">K</span>
           </h1>
-          <span className="text-[10px] uppercase tracking-widest text-gray-600 ml-2">Post-Crime Analysis System</span>
+          <span className="text-[10px] uppercase tracking-widest text-gray-600 ml-2">
+            Post-Crime Analysis System
+          </span>
         </div>
         <div className="flex items-center gap-4 text-sm">
           {report && (
@@ -83,37 +143,48 @@ export default function App() {
               Case {report.case_id}
             </span>
           )}
+          {oakConnection.connected && (
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-detective-success" />
+              <span className="text-gray-400 text-xs">OAK Connected</span>
+            </div>
+          )}
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${connected ? 'bg-detective-success' : 'bg-detective-danger'}`} />
-            <span className="text-gray-400 text-xs">{connected ? 'Online' : 'Connecting...'}</span>
+            <div
+              className={`w-2 h-2 rounded-full ${backendConnected ? "bg-detective-success" : "bg-detective-danger"}`}
+            />
+            <span className="text-gray-400 text-xs">
+              {backendConnected ? "Backend Online" : "Connecting..."}
+            </span>
           </div>
           {recording && (
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-detective-danger recording-pulse" />
-              <span className="text-detective-danger font-medium text-xs">RECORDING</span>
+              <span className="text-detective-danger font-medium text-xs">
+                RECORDING
+              </span>
             </div>
           )}
         </div>
       </header>
 
-      {/* Main Content */}
+      {/* Main Content — 3 columns */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left — Footage Review + Timeline (compact) */}
-        <div className="w-[38%] flex flex-col border-r border-detective-600/30 shrink-0">
-          {/* Footage */}
+        {/* Left — Footage + Timeline */}
+        <div className="w-[28%] flex flex-col border-r border-detective-600/30 shrink-0">
           <div className="h-[45%] flex flex-col border-b border-detective-600/20">
             <FootageReview
               recording={recording}
               onToggleRecording={toggleRecording}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
-              connected={connected}
+              connected={backendConnected}
+              oakConnection={oakConnection}
               phase={phase}
               eventCount={events.length}
               selectedEvent={selectedEvent}
             />
           </div>
-          {/* Event Timeline */}
           <div className="flex-1 overflow-hidden">
             <EventTimeline
               events={events}
@@ -124,8 +195,8 @@ export default function App() {
           </div>
         </div>
 
-        {/* Right — Investigation Report (dominant) */}
-        <div className="flex-1 overflow-hidden">
+        {/* Center — Investigation Report */}
+        <div className="flex-1 overflow-hidden border-r border-detective-600/30">
           <IncidentReport
             report={report}
             phase={phase}
@@ -133,7 +204,26 @@ export default function App() {
             eventCount={events.length}
           />
         </div>
+
+        {/* Right — Detective Chat */}
+        <div className="w-[28%] overflow-hidden shrink-0">
+          <DetectiveChat caseData={caseData} />
+        </div>
       </div>
     </div>
-  )
+  );
+}
+
+export default function App() {
+  if (DepthAIContext) {
+    return (
+      <DepthAIContext
+        connectionConfig={{ type: "ws", wsUrl: "ws://localhost:8765" }}
+        activeServices={[]}
+      >
+        <Dashboard />
+      </DepthAIContext>
+    );
+  }
+  return <Dashboard />;
 }
