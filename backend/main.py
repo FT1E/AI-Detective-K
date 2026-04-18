@@ -1,9 +1,14 @@
+
 import asyncio
 import json
 import random
 from datetime import datetime, timedelta
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+# --- OAK camera integration ---
+import cv2
+import depthai as dai
+import base64
 
 app = FastAPI(title="AI Detective K")
 
@@ -305,26 +310,56 @@ async def websocket_events(websocket: WebSocket):
             msg = await websocket.receive_text()
             data = json.loads(msg)
 
+
             if data.get("action") == "start":
                 recording = True
                 events = []
                 await websocket.send_text(json.dumps({"type": "status", "recording": True}))
 
-                base_time = datetime.now()
-                offset = 0
-                while recording:
-                    await asyncio.sleep(random.uniform(1.5, 3.5))
-                    if not recording:
-                        break
-                    offset += random.randint(8, 35)
-                    event = generate_timeline_event(base_time, offset)
-                    events.append(event)
+                # --- OAK camera pipeline setup ---
+                pipeline = dai.Pipeline()
+                camRgb = pipeline.create(dai.node.ColorCamera)
+                camRgb.setPreviewSize(640, 480)
+                camRgb.setInterleaved(False)
+                camRgb.setColorOrder(dai.ColorCameraProperties.ColorOrder.BGR)
+                xoutRgb = pipeline.create(dai.node.XLinkOut)
+                xoutRgb.setStreamName("video")
+                camRgb.preview.link(xoutRgb.input)
 
+                # Run camera in a thread to avoid blocking
+                def camera_loop():
+                    with dai.Device(pipeline) as device:
+                        qRgb = device.getOutputQueue(name="video", maxSize=4, blocking=False)
+                        while recording:
+                            inRgb = qRgb.tryGet()
+                            if inRgb is not None:
+                                frame = inRgb.getCvFrame()
+                                # Encode frame as JPEG
+                                _, jpeg = cv2.imencode('.jpg', frame)
+                                jpg_bytes = jpeg.tobytes()
+                                jpg_b64 = base64.b64encode(jpg_bytes).decode('utf-8')
+                                # Send frame to frontend
+                                asyncio.run(async_send_frame(jpg_b64))
+                            else:
+                                # If no frame, sleep briefly
+                                import time
+                                time.sleep(0.03)
+
+                # Async helper to send frame
+                async def async_send_frame(jpg_b64):
                     await websocket.send_text(json.dumps({
-                        "type": "event",
-                        "data": event,
-                        "event_count": len(events),
+                        "type": "frame",
+                        "data": jpg_b64
                     }))
+
+                import threading
+                cam_thread = threading.Thread(target=camera_loop, daemon=True)
+                cam_thread.start()
+
+                # Keep backend loop alive while recording
+                while recording:
+                    await asyncio.sleep(0.1)
+
 
             elif data.get("action") == "stop":
                 recording = False
