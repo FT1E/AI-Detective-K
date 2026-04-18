@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Streams } from '@luxonis/depthai-viewer-common'
 
 const VIEW_MODES = [
   { id: 'rgb', label: 'RGB', color: 'from-blue-500 to-cyan-500' },
@@ -6,21 +7,69 @@ const VIEW_MODES = [
   { id: 'depth', label: 'DEPTH', color: 'from-purple-500 to-indigo-500' },
 ]
 
-const FEED_STYLES = {
-  rgb: { bg: 'from-detective-700 to-detective-800', grid: 'border-detective-accent/10', text: 'text-detective-accent', box: 'border-detective-accent' },
-  thermal: { bg: 'from-red-950/80 to-orange-950/60', grid: 'border-red-500/10', text: 'text-orange-400', box: 'border-yellow-400' },
-  depth: { bg: 'from-indigo-950/80 to-purple-950/60', grid: 'border-purple-500/10', text: 'text-purple-400', box: 'border-purple-400' },
+// Map our view modes to OAK topic names
+const VIEW_MODE_TOPICS = {
+  rgb: ['Video'],
+  thermal: ['Thermal'],
+  depth: ['Depth'],
 }
 
-function SimulatedFeed({ viewMode, recording, selectedEvent }) {
-  const [time, setTime] = useState(0)
-  const s = FEED_STYLES[viewMode]
+function OakCameraFeed({ viewMode, oakConnection, recording, selectedEvent }) {
+  const [streamReady, setStreamReady] = useState(false)
 
+  // Latch stream availability
   useEffect(() => {
-    if (!recording) return
-    const interval = setInterval(() => setTime((t) => t + 1), 100)
-    return () => clearInterval(interval)
-  }, [recording])
+    if (streamReady) return
+    if (
+      Array.isArray(oakConnection.topics) &&
+      oakConnection.topics.some((t) => t.name === 'Video')
+    ) {
+      setStreamReady(true)
+    }
+  }, [oakConnection.topics, streamReady])
+
+  // OAK device connected and stream available — show real feed
+  if (oakConnection.connected && streamReady) {
+    return (
+      <div className="relative w-full h-full bg-black overflow-hidden">
+        <Streams
+          defaultTopics={VIEW_MODE_TOPICS[viewMode] || ['Video']}
+          hideToolbar
+        />
+        {/* Recording overlay */}
+        {recording && <div className="scanline" />}
+        {/* Timestamp overlay */}
+        {recording && (
+          <div className="absolute bottom-2 left-2 font-mono text-[10px] text-gray-400 bg-black/50 px-1.5 py-0.5 rounded">
+            {new Date().toLocaleTimeString()} | {viewMode.toUpperCase()} | OAK-4-PRO
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // OAK connected but stream not yet available
+  if (oakConnection.connected && !streamReady) {
+    return (
+      <div className="relative w-full h-full bg-gradient-to-br from-detective-700 to-detective-800 flex flex-col items-center justify-center">
+        <div className="w-10 h-10 rounded-full border-2 border-detective-accent/50 border-t-detective-accent animate-spin mb-3" />
+        <p className="text-detective-accent text-xs">Loading camera streams...</p>
+        <p className="text-detective-600 text-[10px] mt-1">Initializing OAK-4-PRO pipeline</p>
+      </div>
+    )
+  }
+
+  // Fallback — OAK not connected, show placeholder with selected event
+  return <FallbackFeed viewMode={viewMode} recording={recording} selectedEvent={selectedEvent} />
+}
+
+function FallbackFeed({ viewMode, recording, selectedEvent }) {
+  const FEED_STYLES = {
+    rgb: { bg: 'from-detective-700 to-detective-800', grid: 'border-detective-accent/10', text: 'text-detective-accent' },
+    thermal: { bg: 'from-red-950/80 to-orange-950/60', grid: 'border-red-500/10', text: 'text-orange-400' },
+    depth: { bg: 'from-indigo-950/80 to-purple-950/60', grid: 'border-purple-500/10', text: 'text-purple-400' },
+  }
+  const s = FEED_STYLES[viewMode]
 
   return (
     <div className={`relative w-full h-full bg-gradient-to-br ${s.bg} overflow-hidden`}>
@@ -33,27 +82,7 @@ function SimulatedFeed({ viewMode, recording, selectedEvent }) {
 
       {recording && <div className="scanline" />}
 
-      {/* Detection boxes when recording */}
-      {recording && (
-        <>
-          <div className={`absolute border-2 ${s.box} rounded`}
-            style={{ left: `${18 + Math.sin(time * 0.04) * 6}%`, top: '28%', width: '14%', height: '38%' }}>
-            <div className={`absolute -top-5 left-0 text-[10px] font-mono ${s.text} bg-black/70 px-1.5 py-0.5 rounded`}>
-              S-Alpha {viewMode === 'thermal' ? '36.4°C' : viewMode === 'depth' ? '2.3m' : '94%'}
-            </div>
-            {viewMode === 'thermal' && <div className="absolute inset-0 bg-gradient-to-t from-red-500/30 via-yellow-500/15 to-transparent rounded" />}
-            {viewMode === 'depth' && <div className="absolute inset-0 bg-gradient-to-b from-purple-500/20 to-indigo-600/25 rounded" />}
-          </div>
-          <div className={`absolute border-2 ${viewMode === 'thermal' ? 'border-orange-400' : s.box} rounded`}
-            style={{ left: `${52 + Math.cos(time * 0.03) * 4}%`, top: '22%', width: '11%', height: '42%' }}>
-            <div className={`absolute -top-5 left-0 text-[10px] font-mono ${s.text} bg-black/70 px-1.5 py-0.5 rounded`}>
-              S-Gamma {viewMode === 'thermal' ? '37.3°C' : viewMode === 'depth' ? '4.1m' : '87%'}
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Selected event highlight (reviewing a past event) */}
+      {/* Selected event highlight */}
       {!recording && selectedEvent && (
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="bg-black/60 rounded-lg p-3 max-w-[80%] text-center">
@@ -78,21 +107,21 @@ function SimulatedFeed({ viewMode, recording, selectedEvent }) {
           <svg className="w-10 h-10 text-detective-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
           </svg>
-          <p className="text-detective-500 text-xs">Ready to capture footage</p>
+          <p className="text-detective-500 text-xs">OAK camera not connected</p>
+          <p className="text-detective-600 text-[10px] mt-1">Connect OAK-4-PRO to see live feed</p>
         </div>
       )}
 
-      {/* Timestamp */}
       {recording && (
         <div className="absolute bottom-2 left-2 font-mono text-[10px] text-gray-400 bg-black/50 px-1.5 py-0.5 rounded">
-          {new Date().toLocaleTimeString()} | {viewMode.toUpperCase()}
+          {new Date().toLocaleTimeString()} | {viewMode.toUpperCase()} | SIMULATED
         </div>
       )}
     </div>
   )
 }
 
-export default function FootageReview({ recording, onToggleRecording, viewMode, onViewModeChange, connected, phase, eventCount, selectedEvent }) {
+export default function FootageReview({ recording, onToggleRecording, viewMode, onViewModeChange, connected, oakConnection, phase, eventCount, selectedEvent }) {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -101,6 +130,11 @@ export default function FootageReview({ recording, onToggleRecording, viewMode, 
           <h2 className="text-xs font-semibold text-gray-300 uppercase tracking-wider">Footage</h2>
           {recording && (
             <span className="text-[10px] font-mono text-gray-500">{eventCount} events captured</span>
+          )}
+          {oakConnection.connected && (
+            <span className="text-[9px] bg-detective-success/15 text-detective-success px-1.5 py-0.5 rounded border border-detective-success/20">
+              OAK LIVE
+            </span>
           )}
         </div>
         <div className="flex gap-0.5 bg-detective-900/50 rounded p-0.5">
@@ -115,9 +149,14 @@ export default function FootageReview({ recording, onToggleRecording, viewMode, 
         </div>
       </div>
 
-      {/* Feed */}
+      {/* Feed — real OAK or fallback */}
       <div className="flex-1 relative">
-        <SimulatedFeed viewMode={viewMode} recording={recording} selectedEvent={selectedEvent} />
+        <OakCameraFeed
+          viewMode={viewMode}
+          oakConnection={oakConnection}
+          recording={recording}
+          selectedEvent={selectedEvent}
+        />
       </div>
 
       {/* Controls */}
@@ -140,7 +179,9 @@ export default function FootageReview({ recording, onToggleRecording, viewMode, 
             </>
           )}
         </button>
-        <span className="text-[10px] text-gray-600">Camera 01 | {viewMode.toUpperCase()}</span>
+        <span className="text-[10px] text-gray-600">
+          {oakConnection.connected ? 'OAK-4-PRO' : 'Camera 01'} | {viewMode.toUpperCase()}
+        </span>
       </div>
     </div>
   )

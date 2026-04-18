@@ -1,9 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { DepthAIContext, useDaiConnection } from '@luxonis/depthai-viewer-common'
+import '@luxonis/depthai-viewer-common/styles'
 import FootageReview from './components/FootageReview'
 import IncidentReport from './components/IncidentReport'
 import EventTimeline from './components/EventTimeline'
 
-export default function App() {
+function Dashboard() {
+  const oakConnection = useDaiConnection()
+
   const [recording, setRecording] = useState(false)
   const [events, setEvents] = useState([])
   const [report, setReport] = useState(null)
@@ -11,14 +15,14 @@ export default function App() {
   const [viewMode, setViewMode] = useState('rgb')
   const [selectedEvent, setSelectedEvent] = useState(null)
   const wsRef = useRef(null)
-  const [connected, setConnected] = useState(false)
+  const [backendConnected, setBackendConnected] = useState(false)
 
   const connectWs = useCallback(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const ws = new WebSocket(`${protocol}//${window.location.host}/ws/events`)
 
     ws.onopen = () => {
-      setConnected(true)
+      setBackendConnected(true)
       wsRef.current = ws
     }
 
@@ -38,7 +42,7 @@ export default function App() {
     }
 
     ws.onclose = () => {
-      setConnected(false)
+      setBackendConnected(false)
       wsRef.current = null
       setTimeout(connectWs, 2000)
     }
@@ -83,9 +87,17 @@ export default function App() {
               Case {report.case_id}
             </span>
           )}
+          {/* OAK Camera status */}
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${connected ? 'bg-detective-success' : 'bg-detective-danger'}`} />
-            <span className="text-gray-400 text-xs">{connected ? 'Online' : 'Connecting...'}</span>
+            <div className={`w-2 h-2 rounded-full ${oakConnection.connected ? 'bg-detective-success' : 'bg-yellow-500'}`} />
+            <span className="text-gray-400 text-xs">
+              {oakConnection.connected ? 'OAK Connected' : 'OAK Disconnected'}
+            </span>
+          </div>
+          {/* Backend status */}
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${backendConnected ? 'bg-detective-success' : 'bg-detective-danger'}`} />
+            <span className="text-gray-400 text-xs">{backendConnected ? 'Backend Online' : 'Connecting...'}</span>
           </div>
           {recording && (
             <div className="flex items-center gap-2">
@@ -107,7 +119,8 @@ export default function App() {
               onToggleRecording={toggleRecording}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
-              connected={connected}
+              connected={backendConnected}
+              oakConnection={oakConnection}
               phase={phase}
               eventCount={events.length}
               selectedEvent={selectedEvent}
@@ -135,5 +148,16 @@ export default function App() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function App() {
+  return (
+    <DepthAIContext
+      connectionConfig={{ type: 'ws', wsUrl: 'ws://localhost:8765' }}
+      activeServices={[]}
+    >
+      <Dashboard />
+    </DepthAIContext>
   )
 }
