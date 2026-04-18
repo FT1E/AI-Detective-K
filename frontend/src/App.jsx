@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import FootageReview from "./components/FootageReview";
 import IncidentReport from "./components/IncidentReport";
-import EventTimeline from "./components/EventTimeline";
+import SceneCanvas3D from "./components/SceneCanvas3D";
 import DetectiveChat from "./components/DetectiveChat";
 import { getApiUrl } from "./lib/backend";
 
@@ -143,6 +143,10 @@ function Dashboard() {
     }
   };
 
+  const handleReportUpdate = (updatedReport) => {
+    setReport(updatedReport);
+  };
+
   const hasUploads = Object.values(videoSources).some(Boolean);
   const uploadedViewCount = Object.values(videoSources).filter(Boolean).length;
   const phase = report
@@ -200,44 +204,48 @@ function Dashboard() {
         </div>
       </header>
 
-      <div className="flex-1 flex overflow-hidden">
-        <div className="w-[28%] flex flex-col border-r border-detective-600/30 shrink-0">
-          <div className="h-[45%] flex flex-col border-b border-detective-600/20">
-            <FootageReview
-              videoSources={videoSources}
-              onUploadVideo={handleUploadVideo}
-              onClearSession={handleClearSession}
-              onAnalyze={handleAnalyze}
-              viewMode={viewMode}
-              onViewModeChange={setViewMode}
-              phase={phase}
-              eventCount={events.length}
-              selectedEvent={selectedEvent}
-              analyzing={analyzing}
-              backendConnected={backendConnected}
-            />
-          </div>
-          <div className="flex-1 overflow-hidden">
-            <EventTimeline
-              events={events}
-              selectedEvent={selectedEvent}
-              onSelectEvent={setSelectedEvent}
-              phase={phase}
-            />
-          </div>
+      {/* 2x2 grid layout */}
+      <div className="flex-1 grid grid-cols-2 grid-rows-2 overflow-hidden">
+        {/* Top-left: Footage */}
+        <div className="border-r border-b border-detective-600/30 overflow-hidden">
+          <FootageReview
+            videoSources={videoSources}
+            onUploadVideo={handleUploadVideo}
+            onClearSession={handleClearSession}
+            onAnalyze={handleAnalyze}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            phase={phase}
+            eventCount={events.length}
+            selectedEvent={selectedEvent}
+            analyzing={analyzing}
+            backendConnected={backendConnected}
+          />
         </div>
 
-        <div className="flex-1 overflow-hidden border-r border-detective-600/30">
+        {/* Top-right: 3D Scene Canvas */}
+        <div className="border-b border-detective-600/30 overflow-hidden">
+          <SceneCanvas3D />
+        </div>
+
+        {/* Bottom-left: Detective Chat */}
+        <div className="border-r border-detective-600/30 overflow-hidden">
+          <DetectiveChat
+            caseData={caseData}
+            report={report}
+            onReportUpdate={handleReportUpdate}
+          />
+        </div>
+
+        {/* Bottom-right: Report */}
+        <div className="overflow-hidden">
           <IncidentReport
             report={report}
             phase={phase}
             analyzing={analyzing}
             eventCount={events.length}
+            onReportUpdate={handleReportUpdate}
           />
-        </div>
-
-        <div className="w-[28%] overflow-hidden shrink-0">
-          <DetectiveChat caseData={caseData} />
         </div>
       </div>
     </div>

@@ -18,49 +18,6 @@ function formatBytes(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function UploadBadge({ mode, source, active, onSelect, onUpload }) {
-  return (
-    <div
-      className={`rounded-lg border px-2 py-1.5 transition-all ${
-        active
-          ? "border-detective-accent/40 bg-detective-accent/10"
-          : "border-detective-600/20 bg-detective-900/30"
-      }`}
-    >
-      <button
-        type="button"
-        onClick={onSelect}
-        className="w-full text-left"
-      >
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-[10px] font-semibold text-gray-300">
-            {mode.label}
-          </span>
-          <span
-            className={`text-[9px] px-1.5 py-0.5 rounded ${
-              source
-                ? "bg-detective-success/15 text-detective-success"
-                : "bg-detective-700/50 text-gray-500"
-            }`}
-          >
-            {source ? "Loaded" : "Missing"}
-          </span>
-        </div>
-        <div className="mt-1 truncate text-[9px] text-gray-500">
-          {source ? `${source.name} • ${formatBytes(source.size)}` : "Upload this view"}
-        </div>
-      </button>
-      <button
-        type="button"
-        onClick={onUpload}
-        className="mt-2 w-full rounded-md border border-detective-600/20 bg-detective-800/40 px-2 py-1 text-[10px] font-medium text-gray-300 transition-colors hover:border-detective-accent/30 hover:text-white"
-      >
-        {source ? "Replace Video" : "Upload Video"}
-      </button>
-    </div>
-  );
-}
-
 export default function FootageReview({
   videoSources,
   onUploadVideo,
@@ -103,8 +60,16 @@ export default function FootageReview({
     setZoom(Math.max(1, Math.min(2.5, Number(nextZoom))));
   };
 
+  const skipVideo = (seconds) => {
+    const video = videoRefs.current[viewMode];
+    if (video) {
+      video.currentTime = Math.max(0, Math.min(video.duration, video.currentTime + seconds));
+    }
+  };
+
   return (
     <div className="flex flex-col h-full">
+      {/* Header with view mode toggles */}
       <div className="flex items-center justify-between px-3 py-2 bg-detective-800/50 shrink-0">
         <div className="flex items-center gap-2">
           <h2 className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
@@ -112,12 +77,12 @@ export default function FootageReview({
           </h2>
           {hasUploads && (
             <span className="text-[10px] font-mono text-gray-500">
-              {Object.values(videoSources).filter(Boolean).length} views loaded
+              {Object.values(videoSources).filter(Boolean).length} views
             </span>
           )}
           {phase === "report" && (
             <span className="text-[9px] bg-detective-success/15 text-detective-success px-1.5 py-0.5 rounded border border-detective-success/20">
-              Analysis Ready
+              Analyzed
             </span>
           )}
         </div>
@@ -143,35 +108,27 @@ export default function FootageReview({
         </div>
       </div>
 
-      <div className="px-3 py-2.5 bg-detective-900/40 border-y border-detective-600/10 grid grid-cols-3 gap-2 shrink-0">
-        {VIEW_MODES.map((mode) => (
-          <div key={mode.id}>
-            <UploadBadge
-              mode={mode}
-              source={videoSources[mode.id]}
-              active={viewMode === mode.id}
-              onSelect={() => onViewModeChange(mode.id)}
-              onUpload={() => openFilePicker(mode.id)}
-            />
-            <input
-              ref={(node) => {
-                inputRefs.current[mode.id] = node;
-              }}
-              type="file"
-              accept="video/*"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  onUploadVideo(mode.id, file);
-                }
-                e.target.value = "";
-              }}
-            />
-          </div>
-        ))}
-      </div>
+      {/* Hidden file inputs */}
+      {VIEW_MODES.map((mode) => (
+        <input
+          key={mode.id}
+          ref={(node) => {
+            inputRefs.current[mode.id] = node;
+          }}
+          type="file"
+          accept="video/*"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+              onUploadVideo(mode.id, file);
+            }
+            e.target.value = "";
+          }}
+        />
+      ))}
 
+      {/* Video player area */}
       <div className="flex-1 relative bg-black overflow-hidden">
         {activeSource ? (
           <>
@@ -211,28 +168,18 @@ export default function FootageReview({
               {Math.round(zoom * 100)}%
             </div>
 
+            {activeSource && (
+              <div className="absolute left-2 bottom-2 rounded bg-black/60 px-2 py-1 text-[9px] text-gray-400 max-w-[200px] truncate">
+                {activeSource.name} &middot; {formatBytes(activeSource.size)}
+              </div>
+            )}
+
             {selectedEvent && phase === "report" && (
               <div className="absolute inset-x-4 bottom-4 rounded-xl border border-detective-accent/20 bg-black/65 p-3">
                 <div className="text-[10px] uppercase tracking-widest text-detective-accent mb-1">
                   Selected Event
                 </div>
                 <div className="text-xs text-gray-200">{selectedEvent.summary}</div>
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {selectedEvent.sensors?.map((sensor) => (
-                    <span
-                      key={sensor}
-                      className={`rounded px-1.5 py-0.5 text-[9px] uppercase ${
-                        sensor === "thermal"
-                          ? "bg-red-500/10 text-red-400"
-                          : sensor === "depth"
-                            ? "bg-violet-500/10 text-violet-400"
-                            : "bg-blue-500/10 text-blue-400"
-                      }`}
-                    >
-                      {sensor}
-                    </span>
-                  ))}
-                </div>
               </div>
             )}
           </>
@@ -254,43 +201,43 @@ export default function FootageReview({
               </svg>
             </div>
             <p className="text-sm font-medium text-gray-200">
-              {hasUploads
-                ? `No ${VIEW_MODES.find((mode) => mode.id === viewMode)?.label.toLowerCase()} video uploaded yet`
-                : "Upload investigation footage"}
+              Upload investigation footage
             </p>
             <p className="mt-2 max-w-xs text-[11px] leading-relaxed text-gray-500">
-              Add the normal, thermal, and depth recordings you have. You can switch
-              between them instantly, zoom in on details, then stop playback and analyze.
+              Upload video recordings to begin analysis. You can add normal, thermal, and depth views.
             </p>
             <button
               type="button"
               onClick={() => openFilePicker(viewMode)}
               className="mt-4 rounded-lg border border-detective-accent/30 bg-detective-accent/15 px-3 py-1.5 text-xs font-medium text-detective-accent transition-colors hover:bg-detective-accent/25"
             >
-              Upload {VIEW_MODES.find((mode) => mode.id === viewMode)?.label} Video
+              Upload Video
             </button>
           </div>
         )}
       </div>
 
-      <div className="flex items-center justify-between gap-3 px-3 py-2 bg-detective-800/50 border-t border-detective-600/20 shrink-0">
-        <div className="flex items-center gap-2">
+      {/* Controls bar */}
+      <div className="flex items-center justify-between gap-2 px-3 py-2 bg-detective-800/50 border-t border-detective-600/20 shrink-0">
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={() => openFilePicker(viewMode)}
-            className="flex items-center gap-1.5 rounded-lg border border-detective-accent/30 bg-detective-accent/15 px-3 py-1.5 text-xs font-medium text-detective-accent transition-all hover:bg-detective-accent/25"
+            className="flex items-center gap-1 rounded-lg border border-detective-accent/30 bg-detective-accent/15 px-2.5 py-1 text-[11px] font-medium text-detective-accent transition-all hover:bg-detective-accent/25"
           >
-            <div className="w-2.5 h-2.5 rounded-full bg-detective-accent" />
-            Upload Video
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Upload
           </button>
           <button
             type="button"
             onClick={handleAnalyzeClick}
             disabled={!hasUploads || analyzing || !backendConnected}
-            className="flex items-center gap-1.5 rounded-lg border border-detective-danger/30 bg-detective-danger/20 px-3 py-1.5 text-xs font-medium text-detective-danger transition-all hover:bg-detective-danger/30 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex items-center gap-1 rounded-lg border border-detective-danger/30 bg-detective-danger/20 px-2.5 py-1 text-[11px] font-medium text-detective-danger transition-all hover:bg-detective-danger/30 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <div className="w-2.5 h-2.5 rounded-sm bg-detective-danger" />
-            {analyzing ? "Analyzing..." : "Stop & Analyze"}
+            <div className="w-2 h-2 rounded-sm bg-detective-danger" />
+            {analyzing ? "Analyzing..." : "Analyze"}
           </button>
           <button
             type="button"
@@ -299,13 +246,40 @@ export default function FootageReview({
               onClearSession();
             }}
             disabled={!hasUploads}
-            className="rounded-lg border border-detective-600/20 bg-detective-900/40 px-2.5 py-1.5 text-[11px] text-gray-400 transition-colors hover:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="rounded-lg border border-detective-600/20 bg-detective-900/40 px-2 py-1 text-[10px] text-gray-400 transition-colors hover:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Clear
           </button>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Playback controls */}
+        {activeSource && (
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => skipVideo(-10)}
+              className="h-6 w-6 rounded border border-detective-600/20 text-[10px] text-gray-400 transition-colors hover:text-gray-200 flex items-center justify-center"
+              title="Rewind 10s"
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.334 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={() => skipVideo(10)}
+              className="h-6 w-6 rounded border border-detective-600/20 text-[10px] text-gray-400 transition-colors hover:text-gray-200 flex items-center justify-center"
+              title="Forward 10s"
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.933 12.8a1 1 0 000-1.6L6.6 7.2A1 1 0 005 8v8a1 1 0 001.6.8l5.333-4zM19.933 12.8a1 1 0 000-1.6l-5.333-4A1 1 0 0013 8v8a1 1 0 001.6.8l5.333-4z" />
+              </svg>
+            </button>
+          </div>
+        )}
+
+        {/* Zoom controls */}
+        <div className="flex items-center gap-1.5">
           <span className="text-[10px] text-gray-600">Zoom</span>
           <button
             type="button"
@@ -322,7 +296,7 @@ export default function FootageReview({
             step="0.25"
             value={zoom}
             onChange={(e) => handleZoomChange(e.target.value)}
-            className="w-24 accent-detective-accent"
+            className="w-16 accent-detective-accent"
           />
           <button
             type="button"
@@ -332,9 +306,6 @@ export default function FootageReview({
           >
             +
           </button>
-          <span className="text-[10px] text-gray-500 font-mono w-10 text-right">
-            {eventCount} ev
-          </span>
         </div>
       </div>
     </div>
