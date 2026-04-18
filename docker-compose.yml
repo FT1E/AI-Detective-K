@@ -8,8 +8,8 @@ services:
     env_file: .env
     volumes:
       - camera-data:/tmp/camera
-    devices:
-      - /dev/bus/usb:/dev/bus/usb   # OAK-D camera USB passthrough (Linux)
+    # devices:
+    #   - /dev/bus/usb:/dev/bus/usb   # OAK-D camera USB passthrough (Linux)
     networks:
       - app-network
     restart: unless-stopped
