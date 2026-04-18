@@ -13,7 +13,9 @@ services:
     networks:
       - app-network
     restart: unless-stopped
-    depends_on: []
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   frontend:
     build:
@@ -27,19 +29,23 @@ services:
     depends_on:
       - backend
 
-  # Phase 2 — uncomment when database layer is added
-  # postgres:
-  #   image: postgres:16-alpine
-  #   environment:
-  #     POSTGRES_USER: ${POSTGRES_USER:-detective}
-  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
-  #     POSTGRES_DB: ${POSTGRES_DB:-ai_detective_k}
-  #   volumes:
-  #     - postgres-data:/var/lib/postgresql/data
-  #     - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-  #   networks:
-  #     - app-network
-  #   restart: unless-stopped
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-detective}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+      POSTGRES_DB: ${POSTGRES_DB:-ai_detective_k}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-detective} -d ${POSTGRES_DB:-ai_detective_k}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # Phase 3 — uncomment when blockchain layer is added
   # hardhat:
