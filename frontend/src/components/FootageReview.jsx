@@ -10,6 +10,11 @@ const MODE_TINT = {
   depth: "from-violet-950/50 via-transparent to-indigo-950/30",
 };
 
+function toImageSrc(value) {
+  if (!value || typeof value !== "string") return null;
+  return value.startsWith("data:") ? value : `data:image/jpeg;base64,${value}`;
+}
+
 export default function FootageReview({
   frames,
   viewMode,
@@ -19,83 +24,44 @@ export default function FootageReview({
   syncing,
 }) {
   const [zoom, setZoom] = useState(1);
-  const [frameIndex, setFrameIndex] = useState(-1); // -1 = latest
-  const [isPlaying, setIsPlaying] = useState(true);
+  const [frameIndex, setFrameIndex] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [playbackFps, setPlaybackFps] = useState(10);
-  const [currentFrame, setCurrentFrame] = useState(null);
   const containerRef = useRef(null);
-  const framesRef = useRef(frames);
-  const fetchingRef = useRef(false);
-  const tickIdRef = useRef(null);
-  const onVisionSyncRef = useRef(onVisionSync);
-
-  // Keep framesRef in sync with the prop
-  useEffect(() => {
-    framesRef.current = frames;
-  }, [frames]);
-
-  // Keep onVisionSyncRef in sync with the prop
-  useEffect(() => {
-    onVisionSyncRef.current = onVisionSync;
-  }, [onVisionSync]);
-
-  // Streaming loop: pop frames at 30fps, fetch more when empty
-  useEffect(() => {
-    if (!isPlaying) return;
-
-    const tick = async () => {
-      if (!isPlaying) return;
-
-      if (framesRef.current.length > 0) {
-        const next = framesRef.current.shift();
-        setCurrentFrame(next);
-      } else if (backendConnected && !fetchingRef.current) {
-        fetchingRef.current = true;
-        try {
-          const newFrames = await onVisionSyncRef.current();
-          if (newFrames?.length) framesRef.current.push(...newFrames);
-        } catch (e) {
-          console.error("Vision sync failed", e);
-        } finally {
-          fetchingRef.current = false;
-        }
-      }
-
-      if (isPlaying) setTimeout(tick, 1000 / 30);
-    };
-
-    const id = setTimeout(tick, 1000 / 30);
-    return () => {
-      clearTimeout(id);
-    };
-  }, [isPlaying, backendConnected]);
 
   const totalFrames = frames.length;
   const displayIndex =
-    frameIndex < 0 || frameIndex >= totalFrames
-      ? totalFrames - 1
-      : frameIndex;
+    totalFrames > 0
+      ? Math.min(Math.max(frameIndex, 0), totalFrames - 1)
+      : 0;
+  const currentFrame = totalFrames > 0 ? frames[displayIndex] : null;
 
-  // Auto-follow latest when at the end
+  // Freeze to a fixed snapshot after each sync so other panels stop refreshing.
   useEffect(() => {
-    if (isPlaying) return;
-    if (frameIndex < 0 || frameIndex >= totalFrames - 1) {
-      setFrameIndex(-1);
-    }
-  }, [totalFrames, frameIndex, isPlaying]);
-
-  useEffect(() => {
-    if (totalFrames === 0 && isPlaying) {
+    if (totalFrames === 0) {
       setIsPlaying(false);
+      setFrameIndex(0);
+      return;
     }
-  }, [totalFrames, isPlaying]);
+    setIsPlaying(false);
+    setFrameIndex(0);
+  }, [frames, totalFrames]);
+
+  useEffect(() => {
+    if (!isPlaying || totalFrames <= 1) return;
+
+    const intervalMs = Math.max(50, Math.floor(1000 / Math.max(1, playbackFps)));
+    const timer = setInterval(() => {
+      setFrameIndex((prev) => (prev >= totalFrames - 1 ? 0 : prev + 1));
+    }, intervalMs);
+
+    return () => clearInterval(timer);
+  }, [isPlaying, totalFrames, playbackFps]);
 
   const imgContent = currentFrame
     ? viewMode === "depth" && currentFrame.depth_base64
-      ? `data:image/jpeg;base64,${currentFrame.depth_base64}`
-      : currentFrame.rgb_base64
-        ? `data:image/jpeg;base64,${currentFrame.rgb_base64}`
-        : null
+      ? toImageSrc(currentFrame.depth_base64)
+      : toImageSrc(currentFrame.rgb_base64)
     : null;
 
   const handleZoomChange = (next) => {
@@ -103,24 +69,16 @@ export default function FootageReview({
   };
 
   const stepFrame = (delta) => {
+    if (totalFrames === 0) return;
     setIsPlaying(false);
     setFrameIndex((prev) => {
-      const current = prev < 0 ? totalFrames - 1 : prev;
-      const next = current + delta;
-      if (next < 0) return 0;
-      if (next >= totalFrames) return -1;
-      return next;
+      return Math.min(Math.max(prev + delta, 0), totalFrames - 1);
     });
   };
 
   const togglePlayback = () => {
     if (totalFrames === 0) return;
-    setIsPlaying((prev) => {
-      if (!prev && (frameIndex < 0 || frameIndex >= totalFrames - 1)) {
-        setFrameIndex(0);
-      }
-      return !prev;
-    });
+    setIsPlaying((prev) => !prev);
   };
 
   const handleFrameScrub = (nextIndex) => {
@@ -128,7 +86,7 @@ export default function FootageReview({
     setFrameIndex(nextIndex);
   };
 
-  const isLive = frameIndex < 0 || frameIndex >= totalFrames - 1;
+  const isFirstFrame = frameIndex <= 0;
 
   return (
     <div className="flex flex-col h-full">
@@ -141,12 +99,6 @@ export default function FootageReview({
           {totalFrames > 0 && (
             <span className="text-[10px] font-mono text-gray-500">
               {totalFrames} frames
-            </span>
-          )}
-          {isLive && totalFrames > 0 && (
-            <span className="text-[9px] bg-detective-danger/15 text-detective-danger px-1.5 py-0.5 rounded border border-detective-danger/20 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-detective-danger recording-pulse" />
-              LIVE
             </span>
           )}
           {isPlaying && totalFrames > 0 && (
@@ -245,7 +197,7 @@ export default function FootageReview({
               disabled={syncing || !backendConnected}
               className="mt-4 rounded-lg border border-detective-accent/30 bg-detective-accent/15 px-4 py-2 text-xs font-medium text-detective-accent transition-colors hover:bg-detective-accent/25 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {syncing ? "Syncing..." : "Vision Sync Trigger"}
+              {syncing ? "Loading..." : "Load 30 Frames"}
             </button>
             <div className="mt-3 flex items-center gap-2">
               <div className={`w-2 h-2 rounded-full ${backendConnected ? "bg-detective-success" : "bg-detective-danger"}`} />
@@ -314,12 +266,12 @@ export default function FootageReview({
             type="button"
             onClick={() => {
               setIsPlaying(false);
-              setFrameIndex(-1);
+              setFrameIndex(0);
             }}
-            disabled={totalFrames === 0 || isLive}
+            disabled={totalFrames === 0 || isFirstFrame}
             className="h-6 px-2 rounded border border-detective-accent/30 bg-detective-accent/15 text-[10px] font-medium text-detective-accent transition-colors hover:bg-detective-accent/25 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            Live
+            First
           </button>
           <button
             type="button"
@@ -327,7 +279,7 @@ export default function FootageReview({
             disabled={syncing || !backendConnected}
             className="h-6 px-2 rounded border border-detective-success/30 bg-detective-success/15 text-[10px] font-medium text-detective-success transition-colors hover:bg-detective-success/25 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {syncing ? "Syncing…" : "Sync"}
+            {syncing ? "Loading…" : "Load 30"}
           </button>
         </div>
 
