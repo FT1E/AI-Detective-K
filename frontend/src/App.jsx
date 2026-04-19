@@ -242,8 +242,8 @@ function Dashboard() {
         </div>
 
         {/* Cell (1,2) — Top-right: Report / 3D Scene */}
-        <div className="min-w-0 min-h-0 overflow-hidden border-b border-detective-600/30 bg-detective-900 p-2">
-          <div className="flex items-center justify-between mb-2">
+        <div className="min-w-0 min-h-0 overflow-hidden border-b border-detective-600/30 bg-detective-900 p-2 flex flex-col">
+          <div className="flex items-center justify-between mb-2 shrink-0">
             <h2 className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
               {topRightView === "report" ? "Investigation Report" : "3D Scene"}
             </h2>
@@ -264,7 +264,7 @@ function Dashboard() {
               </button>
             </div>
           </div>
-          <div className="h-full">
+          <div className="flex-1 min-h-0 overflow-hidden">
             {topRightView === "report" ? (
               <IncidentReport
                 report={report}

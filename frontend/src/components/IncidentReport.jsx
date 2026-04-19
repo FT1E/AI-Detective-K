@@ -50,7 +50,7 @@ function AnalyzingState({ eventCount }) {
 function IdleState({ cameraSummary, events }) {
   const hasData = cameraSummary || (events && events.length > 0);
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0 overflow-y-auto">
       {cameraSummary && (
         <div className="p-4 border-b border-detective-600/20">
           <CameraSummarySection summary={cameraSummary} />
@@ -62,7 +62,7 @@ function IdleState({ cameraSummary, events }) {
         </div>
       )}
       {!hasData && (
-        <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
+        <div className="flex-1 flex flex-col items-center justify-center text-center px-8 py-10">
           <svg className="w-12 h-12 text-detective-600 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
               strokeLinecap="round"
