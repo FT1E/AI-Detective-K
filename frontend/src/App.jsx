@@ -120,8 +120,8 @@ function Dashboard() {
     setSyncing(true);
     try {
       const data = await fetchCameraOutput();
-      const allFrames = data.flat();
-      setCameraFrames(allFrames);
+      // const allFrames = data.flat();
+      setCameraFrames(data);
       setBackendConnected(true);
 
       // Run analysis with the fetched data
