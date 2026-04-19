@@ -81,10 +81,20 @@ function AnalyzingState({ eventCount }) {
   );
 }
 
-function IdleState({ cameraSummary, events }) {
+function IdleState({ cameraSummary, events, onGenerate }) {
   const hasData = cameraSummary || (events && events.length > 0);
   return (
     <div className="flex flex-col h-full min-h-0 overflow-y-auto">
+      {hasData && onGenerate && (
+        <div className="p-4 border-b border-detective-600/20">
+          <button
+            onClick={onGenerate}
+            className="w-full px-3 py-2 text-xs font-semibold rounded-lg bg-detective-accent/20 text-detective-accent border border-detective-accent/30 hover:bg-detective-accent/30 transition"
+          >
+            Generate Report (last 30 frames)
+          </button>
+        </div>
+      )}
       {cameraSummary && (
         <div className="p-4 border-b border-detective-600/20">
           <CameraSummarySection summary={cameraSummary} />
@@ -118,9 +128,6 @@ function IdleState({ cameraSummary, events }) {
             the latest OAK-D frames. The summary, event timeline, and AI
             analysis will appear here.
           </p>
-          <button onClick={(val) => updateField("recommendation", val)}>
-            Generate Report (last 30 frames)
-          </button>
         </div>
       )}
     </div>
@@ -272,13 +279,20 @@ export default function IncidentReport({
   analyzing,
   eventCount,
   onReportUpdate,
+  onGenerate,
   cameraSummary,
   events,
 }) {
   if (phase === "analyzing" || analyzing)
     return <AnalyzingState eventCount={eventCount} />;
   if (!report)
-    return <IdleState cameraSummary={cameraSummary} events={events} />;
+    return (
+      <IdleState
+        cameraSummary={cameraSummary}
+        events={events}
+        onGenerate={onGenerate}
+      />
+    );
 
   const threat =
     THREAT_STYLES[report.threat_assessment?.level] || THREAT_STYLES.moderate;
