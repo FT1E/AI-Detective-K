@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import FootageReview from "./components/FootageReview";
-import IncidentReport from "./components/IncidentReport";
 import FrameAnnotator from "./components/FrameAnnotator";
 import FollowUpQuestions from "./components/FollowUpQuestions";
 // import DetectiveChat from "./components/DetectiveChat";
@@ -281,37 +280,10 @@ function Dashboard() {
           gridTemplateRows: `${rowPct} 1fr`,
         }}
       >
-        {/* LEFT COLUMN — FrameAnnotator (top half) + FollowUpQuestions (bottom half) */}
+        {/* TOP LEFT — FootageReview */}
         <div
-          style={{ gridColumn: 1, gridRow: "1 / span 2" }}
-          className="min-w-0 min-h-0 overflow-hidden border-r border-detective-600/30 flex flex-col"
-        >
-          <div style={{ flex: "1 1 50%", minHeight: 0, overflow: "hidden" }}>
-            <FrameAnnotator
-              frame={capturedFrame}
-              annotations={annotations}
-              onAnnotationsChange={setAnnotations}
-              onAnalyze={handleAnalyze}
-              disabled={followUpState.loading}
-            />
-          </div>
-          <div className="h-px bg-detective-600/20 shrink-0" />
-          <div style={{ flex: "1 1 50%", minHeight: 0, overflow: "auto" }}>
-            <FollowUpQuestions
-              followUpState={followUpState}
-              onSelectOption={handleSelectOption}
-              onCustomAnswer={handleCustomAnswer}
-              onReset={() =>
-                setFollowUpState({ questions: null, history: [], loading: false, stage: "idle" })
-              }
-            />
-          </div>
-        </div>
-
-        {/* TOP RIGHT — FootageReview + Capture button */}
-        <div
-          style={{ gridColumn: 2, gridRow: 1 }}
-          className="min-w-0 min-h-0 overflow-hidden border-b border-detective-600/30"
+          style={{ gridColumn: 1, gridRow: 1 }}
+          className="min-w-0 min-h-0 overflow-hidden border-r border-b border-detective-600/30"
         >
           <FootageReview
             frames={cameraFrames}
@@ -324,25 +296,48 @@ function Dashboard() {
           />
         </div>
 
-        {/* BOTTOM RIGHT — Incident Report */}
+        {/* TOP RIGHT — FrameAnnotator */}
+        <div
+          style={{ gridColumn: 2, gridRow: 1 }}
+          className="min-w-0 min-h-0 overflow-hidden border-b border-detective-600/30"
+        >
+          <FrameAnnotator
+            frame={capturedFrame}
+            annotations={annotations}
+            onAnnotationsChange={setAnnotations}
+            onAnalyze={handleAnalyze}
+            disabled={followUpState.loading}
+          />
+        </div>
+
+        {/* BOTTOM LEFT — Analysis results placeholder */}
+        <div
+          style={{ gridColumn: 1, gridRow: 2 }}
+          className="min-w-0 min-h-0 overflow-hidden border-r border-detective-600/30 flex items-center justify-center"
+        >
+          <p className="text-gray-500 text-sm italic">Analysis results will appear here</p>
+        </div>
+
+        {/* BOTTOM RIGHT — FollowUpQuestions */}
         <div
           style={{ gridColumn: 2, gridRow: 2 }}
           className="min-w-0 min-h-0 overflow-hidden"
         >
-          <IncidentReport
-            report={report}
-            phase={phase}
-            analyzing={syncing}
-            eventCount={events.length}
-            onReportUpdate={handleReportUpdate}
+          <FollowUpQuestions
+            followUpState={followUpState}
+            onSelectOption={handleSelectOption}
+            onCustomAnswer={handleCustomAnswer}
+            onReset={() =>
+              setFollowUpState({ questions: null, history: [], loading: false, stage: "idle" })
+            }
           />
         </div>
 
-        {/* Row resize handle — only spans the right column */}
+        {/* Row resize handle — spans full width */}
         <div
           onPointerDown={row.onPointerDown}
           className="absolute h-1 cursor-row-resize z-30 bg-detective-600/20 hover:bg-detective-accent/30 transition-colors"
-          style={{ left: colPct, right: 0, top: rowPct, transform: "translateY(-50%)" }}
+          style={{ left: 0, right: 0, top: rowPct, transform: "translateY(-50%)" }}
         />
 
         {/* Column resize handle */}
