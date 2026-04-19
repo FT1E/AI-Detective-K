@@ -287,9 +287,9 @@ function Dashboard() {
           style={{ gridRow: "1 / span 2" }}
         >
           <div className="flex items-center justify-between mb-2">
-            <h2 className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
+            {/* <h2 className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
               AI Detective
-            </h2>
+            </h2>*/}
             <div className="text-xs text-gray-500">Phase: {phase}</div>
           </div>
           <div className="h-full">
