@@ -6,16 +6,9 @@ import { WebSocketServer } from "ws";
 
 import caseRouter from "./routes/case.js";
 import analysisRouter from "./routes/analysis.js";
-<<<<<<< HEAD
 import investigateRouter from "./routes/investigate.js";
 import eventsRouter, { handleWebSocket } from "./routes/events.js";
 import cameraOutputRouter from "./routes/cameraOutput.js";
-=======
-
-import investigateRouter from "./routes/investigate.js";
-import cameraPayloadRouter from "./routes/cameraPayload.js";
-import eventsRouter, { handleWebSocket } from "./routes/events.js";
->>>>>>> origin/dev
 
 const app = express();
 const server = createServer(app);
