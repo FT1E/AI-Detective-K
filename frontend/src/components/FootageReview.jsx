@@ -146,7 +146,7 @@ export default function FootageReview({
 
       {/* Frame display */}
       <div ref={containerRef} className="flex-1 relative bg-black overflow-hidden">
-        {imgSrc ? (
+        {currentFrame != null ? (
           <>
             <img
               src={imgSrc}
