@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 const THREAT_STYLES = {
   critical: {
     bg: "bg-detective-danger/15",
@@ -81,10 +83,20 @@ function AnalyzingState({ eventCount }) {
   );
 }
 
-function IdleState({ cameraSummary, events }) {
+function IdleState({ cameraSummary, events, onGenerate }) {
   const hasData = cameraSummary || (events && events.length > 0);
   return (
     <div className="flex flex-col h-full min-h-0 overflow-y-auto">
+      {hasData && onGenerate && (
+        <div className="p-4 border-b border-detective-600/20">
+          <button
+            onClick={onGenerate}
+            className="w-full px-3 py-2 text-xs font-semibold rounded-lg bg-detective-accent/20 text-detective-accent border border-detective-accent/30 hover:bg-detective-accent/30 transition"
+          >
+            Generate Report (last 30 frames)
+          </button>
+        </div>
+      )}
       {cameraSummary && (
         <div className="p-4 border-b border-detective-600/20">
           <CameraSummarySection summary={cameraSummary} />
@@ -118,9 +130,6 @@ function IdleState({ cameraSummary, events }) {
             the latest OAK-D frames. The summary, event timeline, and AI
             analysis will appear here.
           </p>
-          <button onClick={(val) => updateField("recommendation", val)}>
-            Generate Report (last 30 frames)
-          </button>
         </div>
       )}
     </div>
@@ -272,16 +281,24 @@ export default function IncidentReport({
   analyzing,
   eventCount,
   onReportUpdate,
+  onGenerate,
   cameraSummary,
   events,
 }) {
   if (phase === "analyzing" || analyzing)
     return <AnalyzingState eventCount={eventCount} />;
   if (!report)
-    return <IdleState cameraSummary={cameraSummary} events={events} />;
+    return (
+      <IdleState
+        cameraSummary={cameraSummary}
+        events={events}
+        onGenerate={onGenerate}
+      />
+    );
 
   const threat =
     THREAT_STYLES[report.threat_assessment?.level] || THREAT_STYLES.moderate;
+  const [narrativeDraft, setNarrativeDraft] = useState(report.narrative || "");
 
   const updateField = (path, value) => {
     if (!onReportUpdate) return;
@@ -294,6 +311,10 @@ export default function IncidentReport({
     obj[keys[keys.length - 1]] = value;
     onReportUpdate(updated);
   };
+
+  useEffect(() => {
+    setNarrativeDraft(report.narrative || "");
+  }, [report.narrative]);
 
   return (
     <div className="flex flex-col h-full">
@@ -335,11 +356,21 @@ export default function IncidentReport({
             <SectionHeader label="Incident Narrative" />
             <div className="bg-detective-800/40 rounded-xl p-3 border border-detective-600/15">
               <EditableField
-                value={report.narrative}
-                onChange={(val) => updateField("narrative", val)}
+                value={narrativeDraft}
+                onChange={setNarrativeDraft}
                 multiline
                 className="text-sm text-gray-300 leading-relaxed"
               />
+              <div className="mt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => updateField("narrative", narrativeDraft)}
+                  disabled={narrativeDraft === (report.narrative || "")}
+                  className="rounded-lg border border-detective-accent/30 bg-detective-accent/15 px-3 py-1.5 text-[11px] font-medium text-detective-accent transition-colors hover:bg-detective-accent/25 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Apply Narrative
+                </button>
+              </div>
             </div>
           </div>
         )}

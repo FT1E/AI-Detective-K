@@ -86,6 +86,9 @@ export const COCO_LABELS = [
   "pencil",
   "knife",
   "scissors",
+  "ball",
+  "tennis ball",
+  "keyboard",
 ];
 
 export function labelName(id) {
