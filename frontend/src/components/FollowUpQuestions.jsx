@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -129,6 +129,11 @@ export default function FollowUpQuestions({
   const [selectedId, setSelectedId] = useState(null);
   const { questions, history, loading, stage } = followUpState;
 
+  // Reset selection when a new question arrives
+  useEffect(() => {
+    setSelectedId(null);
+  }, [questions?.question]);
+
   const handleSelect = (option) => {
     setSelectedId(option.id);
     onSelectOption(questions?.question, option);
@@ -138,12 +143,6 @@ export default function FollowUpQuestions({
     setSelectedId("D");
     onCustomAnswer(questions?.question, text);
   };
-
-  // Reset selectedId when a new question arrives
-  const prevQuestion = questions?.question;
-  if (prevQuestion && selectedId && stage === "questioning") {
-    // Keep selected until next question loads
-  }
 
   // ── Idle ─────────────────────────────────────────────────────────────────
   if (stage === "idle" && !loading) {
