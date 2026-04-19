@@ -25,7 +25,7 @@ export default function FootageReview({
   const containerRef = useRef(null);
 
   // Resolve which frame to show
-  const totalFrames = frames.length;
+  let totalFrames = frames.length;
   let displayIndex =
     frameIndex < 0 || frameIndex >= totalFrames ? totalFrames - 1 : frameIndex;
   let currentFrame = totalFrames > 0 ? frames[displayIndex] : null;
@@ -38,6 +38,17 @@ export default function FootageReview({
   //   })
   // }, [currentFrame])
 
+  // for setting the next frame
+  useEffect(() => {
+    setTimeout( () => {
+      if(++displayIndex == totalFrames){
+        onVisionSync();
+        return
+      }
+      currentFrame = frames[displayIndex];
+    }, 1000 / 30) // 30 times per second
+  }, [currentFrame])
+
   // Auto-follow latest when at the end
   useEffect(() => {
     if (isPlaying) return;
@@ -46,20 +57,7 @@ export default function FootageReview({
     }
   }, [totalFrames, frameIndex, isPlaying]);
 
-  useEffect(() => {
-    if (!isPlaying || totalFrames <= 1) return;
-
-    const intervalMs = Math.max(50, Math.floor(1000 / playbackFps));
-    const timer = setInterval(() => {
-      setFrameIndex((prev) => {
-        const current = prev < 0 ? 0 : prev;
-        if (current >= totalFrames - 1) return 0;
-        return current + 1;
-      });
-    }, intervalMs);
-
-    return () => clearInterval(timer);
-  }, [isPlaying, playbackFps, totalFrames]);
+  
 
   useEffect(() => {
     if (totalFrames === 0 && isPlaying) {
