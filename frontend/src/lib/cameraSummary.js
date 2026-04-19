@@ -1,18 +1,91 @@
 // COCO class names (YOLO default label set). Keys are the numeric label ids
 // returned by the spatial detection network in /api/camera-output.
 export const COCO_LABELS = [
-  "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck",
-  "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench",
-  "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra",
-  "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
-  "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove",
-  "skateboard", "surfboard", "tennis racket", "bottle", "wine glass", "cup",
-  "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange",
-  "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch",
-  "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse",
-  "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink",
-  "refrigerator", "book", "clock", "vase", "scissors", "teddy bear",
-  "hair drier", "toothbrush",
+  "person",
+  "bicycle",
+  "car",
+  "motorcycle",
+  "airplane",
+  "bus",
+  "train",
+  "truck",
+  "boat",
+  "traffic light",
+  "fire hydrant",
+  "stop sign",
+  "parking meter",
+  "bench",
+  "bird",
+  "cat",
+  "dog",
+  "horse",
+  "sheep",
+  "cow",
+  "elephant",
+  "bear",
+  "zebra",
+  "giraffe",
+  "backpack",
+  "umbrella",
+  "handbag",
+  "tie",
+  "suitcase",
+  "frisbee",
+  "skis",
+  "snowboard",
+  "sports ball",
+  "kite",
+  "baseball bat",
+  "baseball glove",
+  "skateboard",
+  "surfboard",
+  "tennis racket",
+  "bottle",
+  "wine glass",
+  "cup",
+  "fork",
+  "knife",
+  "spoon",
+  "bowl",
+  "banana",
+  "apple",
+  "sandwich",
+  "orange",
+  "broccoli",
+  "carrot",
+  "hot dog",
+  "pizza",
+  "donut",
+  "cake",
+  "chair",
+  "couch",
+  "potted plant",
+  "bed",
+  "dining table",
+  "toilet",
+  "tv",
+  "laptop",
+  "mouse",
+  "remote",
+  "keyboard",
+  "cell phone",
+  "microwave",
+  "oven",
+  "toaster",
+  "sink",
+  "refrigerator",
+  "book",
+  "clock",
+  "vase",
+  "scissors",
+  "teddy bear",
+  "hair drier",
+  "toothbrush",
+  "pen",
+  "eraser",
+  "pencil",
+  "knife",
+  "scissors",
 ];
 
 export function labelName(id) {
@@ -32,10 +105,13 @@ function distanceMeters(spatial) {
 // Straight-line distance between two spatial points (meters).
 function pairDistanceMeters(a, b) {
   if (!a || !b) return null;
-  const ax = Number(a.x) || 0, az = Number(a.z) || 0;
-  const bx = Number(b.x) || 0, bz = Number(b.z) || 0;
+  const ax = Number(a.x) || 0,
+    az = Number(a.z) || 0;
+  const bx = Number(b.x) || 0,
+    bz = Number(b.z) || 0;
   if ((ax === 0 && az === 0) || (bx === 0 && bz === 0)) return null;
-  const dx = ax - bx, dz = az - bz;
+  const dx = ax - bx,
+    dz = az - bz;
   return Math.sqrt(dx * dx + dz * dz) / 1000;
 }
 
@@ -50,7 +126,8 @@ export function summarizeFrames(frames) {
 
   frames.forEach((frame, frameIndex) => {
     if (typeof frame?.timestamp === "number") {
-      if (firstTs === null || frame.timestamp < firstTs) firstTs = frame.timestamp;
+      if (firstTs === null || frame.timestamp < firstTs)
+        firstTs = frame.timestamp;
       if (lastTs === null || frame.timestamp > lastTs) lastTs = frame.timestamp;
     }
 
@@ -85,8 +162,10 @@ export function summarizeFrames(frames) {
       }
       if (conf > agg.maxConf) agg.maxConf = conf;
       if (dist != null) {
-        if (agg.minDistance == null || dist < agg.minDistance) agg.minDistance = dist;
-        if (agg.maxDistance == null || dist > agg.maxDistance) agg.maxDistance = dist;
+        if (agg.minDistance == null || dist < agg.minDistance)
+          agg.minDistance = dist;
+        if (agg.maxDistance == null || dist > agg.maxDistance)
+          agg.maxDistance = dist;
       }
       agg.lastSeenIndex = frameIndex;
 
@@ -105,19 +184,26 @@ export function summarizeFrames(frames) {
         if (a.label === b.label) continue;
         const d = pairDistanceMeters(a.spatial, b.spatial);
         if (d == null) continue;
-        const [loA, loB] = a.label < b.label ? [a.label, b.label] : [b.label, a.label];
+        const [loA, loB] =
+          a.label < b.label ? [a.label, b.label] : [b.label, a.label];
         const key = `${loA}|${loB}`;
         let p = pairs.get(key);
         if (!p) {
           p = {
-            a: loA, b: loB,
-            nameA: labelName(loA), nameB: labelName(loB),
-            minDist: d, maxDist: d,
+            a: loA,
+            b: loB,
+            nameA: labelName(loA),
+            nameB: labelName(loB),
+            minDist: d,
+            maxDist: d,
             frameIndex,
           };
           pairs.set(key, p);
         } else {
-          if (d < p.minDist) { p.minDist = d; p.frameIndex = frameIndex; }
+          if (d < p.minDist) {
+            p.minDist = d;
+            p.frameIndex = frameIndex;
+          }
           if (d > p.maxDist) p.maxDist = d;
         }
       }
