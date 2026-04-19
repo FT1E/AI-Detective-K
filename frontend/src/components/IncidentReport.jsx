@@ -285,8 +285,10 @@ export default function IncidentReport({
   cameraSummary,
   events,
 }) {
-  if (phase === "analyzing" || analyzing)
-    return <AnalyzingState eventCount={eventCount} />;
+  // Show analyzing state only during report generation
+  if (analyzing) return <AnalyzingState eventCount={eventCount} />;
+  
+  // Show idle state when no report exists
   if (!report)
     return (
       <IdleState
@@ -296,6 +298,7 @@ export default function IncidentReport({
       />
     );
 
+  // Show report view
   const threat =
     THREAT_STYLES[report.threat_assessment?.level] || THREAT_STYLES.moderate;
   const [narrativeDraft, setNarrativeDraft] = useState(report.narrative || "");
