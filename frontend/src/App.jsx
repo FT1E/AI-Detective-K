@@ -160,13 +160,7 @@ function Dashboard() {
     };
   }, [cameraSummary, events, cameraFrames]);
 
-  const phase = report
-    ? "report"
-    : syncing
-      ? "analyzing"
-      : cameraFrames.length > 0
-        ? "reviewing"
-        : "idle";
+  const phase = "idle"
 
   const [topRightView, setTopRightView] = useState("report");
 
