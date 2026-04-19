@@ -124,6 +124,8 @@ function Dashboard() {
       setCameraFrames(data);
       setBackendConnected(true);
 
+      yield data;
+      
       // Run analysis with the fetched data
       const analysis = await runAnalysis();
       setEvents(analysis.events || []);

@@ -43,11 +43,11 @@ export default function FootageReview({
   // for setting the next frame
   useEffect(() => {
     setTimeout( () => {
-      if(++displayIndex == totalFrames){
-        onVisionSync();
-        return
+      if(frames.length <= 0){
+        frames.push(onVisionSync())
       }
-      currentFrame = frames[displayIndex];
+      currentFrame = frames.pop();
+
     }, 1000 / 30) // 30 times per second
   }, [currentFrame])
 
