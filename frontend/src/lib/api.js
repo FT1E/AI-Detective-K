@@ -1,5 +1,18 @@
 import { getApiUrl } from "./urls";
 
+const CAMERA_OUTPUT_FALLBACK_URL =
+  (import.meta.env.VITE_CAMERA_OUTPUT_URL || "https://ai-detective-k-9gvw.onrender.com/api/camera-output").trim();
+
+async function fetchWithTimeout(url, timeoutMs = 4000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
  * Fetch the initial case data from the backend.
  * Returns the case data object or null on failure.
@@ -50,12 +63,30 @@ export async function runAnalysis() {
  * @returns {Promise<object[]>}
  */
 export async function fetchCameraOutput() {
-  const res = await fetch(getApiUrl("/camera-output"));
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`Camera output GET failed: ${res.status} ${text.slice(0, 200)}`);
+  const localUrl = getApiUrl("/camera-output");
+  const candidates = [localUrl];
+
+  if (CAMERA_OUTPUT_FALLBACK_URL && CAMERA_OUTPUT_FALLBACK_URL !== localUrl) {
+    candidates.push(CAMERA_OUTPUT_FALLBACK_URL);
   }
-  return res.json();
+
+  let lastError = null;
+
+  for (const url of candidates) {
+    try {
+      const res = await fetchWithTimeout(url);
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(`Camera output GET failed at ${url}: ${res.status} ${text.slice(0, 200)}`);
+      }
+      return await res.json();
+    } catch (err) {
+      lastError = err;
+      console.warn("Camera output fetch attempt failed:", url, err?.message || err);
+    }
+  }
+
+  throw lastError || new Error("Camera output GET failed for all endpoints");
 }
 
 /**
