@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import FootageReview from "./components/FootageReview";
 import IncidentReport from "./components/IncidentReport";
-import SceneCanvas3D from "./components/SceneCanvas3D";
-import DetectiveChat from "./components/DetectiveChat";
-import { fetchCaseData, runAnalysis, fetchCameraOutput } from "./lib/api";
+import FrameAnnotator from "./components/FrameAnnotator";
+import FollowUpQuestions from "./components/FollowUpQuestions";
+// import DetectiveChat from "./components/DetectiveChat";
+import { fetchCaseData, runAnalysis, fetchCameraOutput, runAgentAnalysis } from "./lib/api";
 
 /* ── Resize hook ── */
 function useResize(initial, axis) {
@@ -50,36 +51,18 @@ function useResize(initial, axis) {
 /* ── Theme icons ── */
 function SunIcon() {
   return (
-    <svg
-      className="w-4 h-4"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2}
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
-      />
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round"
+        d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
     </svg>
   );
 }
 
 function MoonIcon() {
   return (
-    <svg
-      className="w-4 h-4"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2}
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
-      />
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round"
+        d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
     </svg>
   );
 }
@@ -92,10 +75,26 @@ function Dashboard() {
   const [backendConnected, setBackendConnected] = useState(false);
   const [theme, setTheme] = useState("dark");
   const [cameraFrames, setCameraFrames] = useState([]);
+  const [syncing, setSyncing] = useState(false);
 
-  // Controls for split ratio — re-used to allow drag resizing of grid rows/cols
+  // Left panel state
+  const [capturedFrame, setCapturedFrame] = useState(null);
+  const [annotations, setAnnotations] = useState([]);
+  const [followUpState, setFollowUpState] = useState({
+    questions: null,
+    history: [],
+    loading: false,
+    stage: "idle",
+  });
+
   const col = useResize(0.5, "col");
   const row = useResize(0.5, "row");
+
+  // Both resize hooks share the same grid container ref
+  const gridRef = useCallback((el) => {
+    col.containerRef.current = el;
+    row.containerRef.current = el;
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -113,18 +112,13 @@ function Dashboard() {
       });
   }, []);
 
-  const [syncing, setSyncing] = useState(false);
-
   const handleVisionSync = async () => {
     if (syncing) return;
     setSyncing(true);
     try {
       const data = await fetchCameraOutput();
-      // const allFrames = data.flat();
       setCameraFrames(data);
       setBackendConnected(true);
-
-      // Run analysis with the fetched data
       const analysis = await runAnalysis();
       setEvents(analysis.events || []);
       setReport(analysis.report || null);
@@ -140,6 +134,71 @@ function Dashboard() {
     setReport(updatedReport);
   };
 
+  const handleCaptureFrame = (frame) => {
+    setCapturedFrame(frame);
+    setAnnotations([]);
+    setFollowUpState({ questions: null, history: [], loading: false, stage: "idle" });
+  };
+
+  const handleAnalyze = async () => {
+    if (!capturedFrame || annotations.length === 0) return;
+    setFollowUpState((prev) => ({ ...prev, loading: true, stage: "analyzing" }));
+    try {
+      const res = await runAgentAnalysis(annotations);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let currentEvent = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop();
+
+        for (const line of lines) {
+          if (line.startsWith("event: ")) {
+            currentEvent = line.slice(7).trim();
+          } else if (line.startsWith("data: ")) {
+            const raw = line.slice(6);
+            let data;
+            try { data = JSON.parse(raw); } catch { data = raw; }
+
+            if (currentEvent === "report") {
+              const reportObj = typeof data === "string" ? JSON.parse(data) : data;
+              if (reportObj) setReport(reportObj);
+              setFollowUpState((prev) => ({ ...prev, loading: false, stage: "idle" }));
+            } else if (currentEvent === "error") {
+              setFollowUpState((prev) => ({ ...prev, loading: false, stage: "idle" }));
+            }
+            currentEvent = null;
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Analysis failed:", err);
+      setFollowUpState((prev) => ({ ...prev, loading: false, stage: "idle" }));
+    }
+  };
+
+  const handleSelectOption = async (questionText, option) => {
+    const currentQ = followUpState.questions;
+    setFollowUpState((prev) => ({
+      ...prev,
+      history: [...prev.history, { question: currentQ, answer: option }],
+      questions: null,
+      loading: true,
+    }));
+    // TODO Step 5: call fetchFollowUpQuestions for next question
+  };
+
+  const handleCustomAnswer = async (questionText, text) => {
+    handleSelectOption(questionText, { id: "D", text });
+  };
+
   const phase = report
     ? "report"
     : syncing
@@ -148,16 +207,8 @@ function Dashboard() {
         ? "reviewing"
         : "idle";
 
-  // Layout toggles for right cells: "report" | "scene"
-  const [topRightView, setTopRightView] = useState("report");
-  const [bottomRightView, setBottomRightView] = useState("report");
-
   const colPct = `${col.ratio * 100}%`;
   const rowPct = `${row.ratio * 100}%`;
-
-  // CSS grid template using the resize ratios
-  const gridTemplateColumns = `${colPct} 1fr`;
-  const gridTemplateRows = `${rowPct} 1fr`;
 
   return (
     <div className="h-screen flex flex-col bg-detective-900">
@@ -182,9 +233,7 @@ function Dashboard() {
           {cameraFrames.length > 0 && (
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-detective-accent" />
-              <span className="text-gray-400 text-xs">
-                {cameraFrames.length} frames
-              </span>
+              <span className="text-gray-400 text-xs">{cameraFrames.length} frames</span>
             </div>
           )}
           <div className="flex items-center gap-2">
@@ -198,9 +247,7 @@ function Dashboard() {
           {syncing && (
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-detective-warn recording-pulse" />
-              <span className="text-detective-warn font-medium text-xs">
-                SYNCING
-              </span>
+              <span className="text-detective-warn font-medium text-xs">SYNCING</span>
             </div>
           )}
           <button
@@ -213,112 +260,85 @@ function Dashboard() {
         </div>
       </header>
 
-      {/* Grid layout: 2 columns x 2 rows */}
+      {/* 2-col × 2-row grid: left spans full height, right is split top/bottom */}
       <div
-        ref={col.containerRef}
+        ref={gridRef}
         className="flex-1 relative overflow-hidden"
         style={{
           display: "grid",
-          gridTemplateColumns,
-          gridTemplateRows,
-          gap: "8px",
+          gridTemplateColumns: `${colPct} 1fr`,
+          gridTemplateRows: `${rowPct} 1fr`,
         }}
       >
-        {/* Cell (1,1) — Footage (top-left) */}
-        <div className="min-w-0 min-h-0 overflow-hidden border-r border-b border-detective-600/30 bg-detective-900 p-2">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
-              Footage
-            </h2>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleVisionSync}
-                className="px-3 py-1 text-xs rounded-lg bg-detective-accent/20 text-detective-accent border border-detective-accent/30 hover:bg-detective-accent/30 transition"
-              >
-                Sync
-              </button>
-            </div>
-          </div>
-          <div className="h-full">
-            <FootageReview
-              frames={cameraFrames}
-              viewMode={viewMode}
-              onViewModeChange={setViewMode}
-              backendConnected={backendConnected}
-              onVisionSync={handleVisionSync}
-              syncing={syncing}
-            />
-          </div>
-        </div>
-
-        {/* Cell (1,2) — Top-right: toggle between Report and 3D Scene */}
-        <div className="min-w-0 min-h-0 overflow-hidden border-b border-detective-600/30 bg-detective-900 p-2">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
-              {topRightView === "report" ? "Investigation Report" : "3D Scene"}
-            </h2>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setTopRightView("report")}
-                className={`px-2 py-1 text-xs rounded ${topRightView === "report" ? "bg-detective-accent text-white" : "bg-detective-800 text-gray-300"}`}
-                title="Show report"
-              >
-                Report
-              </button>
-              <button
-                onClick={() => setTopRightView("scene")}
-                className={`px-2 py-1 text-xs rounded ${topRightView === "scene" ? "bg-detective-accent text-white" : "bg-detective-800 text-gray-300"}`}
-                title="Show 3D scene"
-              >
-                3D
-              </button>
-            </div>
-          </div>
-          <div className="h-full">
-            {topRightView === "report" ? (
-              <IncidentReport
-                report={report}
-                phase={phase}
-                analyzing={syncing}
-                eventCount={events.length}
-                onReportUpdate={handleReportUpdate}
-              />
-            ) : (
-              <SceneCanvas3D />
-            )}
-          </div>
-        </div>
-
-        {/* Cell (2,1) — Bottom-left: AI Detective chat */}
+        {/* LEFT COLUMN — FrameAnnotator (top half) + FollowUpQuestions (bottom half) */}
         <div
-          className="min-w-0 min-h-0 overflow-hidden border-r border-detective-600/30 bg-detective-900 p-2"
-          style={{ gridRow: "1 / span 2" }}
+          style={{ gridColumn: 1, gridRow: "1 / span 2" }}
+          className="min-w-0 min-h-0 overflow-hidden border-r border-detective-600/30 flex flex-col"
         >
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
-              AI Detective
-            </h2>
-            <div className="text-xs text-gray-500">Phase: {phase}</div>
+          <div style={{ flex: "1 1 50%", minHeight: 0, overflow: "hidden" }}>
+            <FrameAnnotator
+              frame={capturedFrame}
+              annotations={annotations}
+              onAnnotationsChange={setAnnotations}
+              onAnalyze={handleAnalyze}
+              disabled={followUpState.loading}
+            />
           </div>
-          <div className="h-full">
-            <DetectiveChat
-              caseData={caseData}
-              report={report}
-              onReportUpdate={handleReportUpdate}
+          <div className="h-px bg-detective-600/20 shrink-0" />
+          <div style={{ flex: "1 1 50%", minHeight: 0, overflow: "auto" }}>
+            <FollowUpQuestions
+              followUpState={followUpState}
+              onSelectOption={handleSelectOption}
+              onCustomAnswer={handleCustomAnswer}
+              onReset={() =>
+                setFollowUpState({ questions: null, history: [], loading: false, stage: "idle" })
+              }
             />
           </div>
         </div>
 
-        {/* Resize handles: horizontal and vertical */}
+        {/* TOP RIGHT — FootageReview + Capture button */}
+        <div
+          style={{ gridColumn: 2, gridRow: 1 }}
+          className="min-w-0 min-h-0 overflow-hidden border-b border-detective-600/30"
+        >
+          <FootageReview
+            frames={cameraFrames}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            backendConnected={backendConnected}
+            onVisionSync={handleVisionSync}
+            syncing={syncing}
+            onCaptureFrame={handleCaptureFrame}
+          />
+        </div>
+
+        {/* BOTTOM RIGHT — Incident Report */}
+        <div
+          style={{ gridColumn: 2, gridRow: 2 }}
+          className="min-w-0 min-h-0 overflow-hidden"
+        >
+          <IncidentReport
+            report={report}
+            phase={phase}
+            analyzing={syncing}
+            eventCount={events.length}
+            onReportUpdate={handleReportUpdate}
+          />
+        </div>
+
+        {/* Row resize handle — only spans the right column */}
         <div
           onPointerDown={row.onPointerDown}
-          className="absolute left-0 right-0 h-1 cursor-row-resize -translate-y-1/2 z-30"
-          style={{ top: `calc(${rowPct})` }}
+          className="absolute h-1 cursor-row-resize z-30 bg-detective-600/20 hover:bg-detective-accent/30 transition-colors"
+          style={{ left: colPct, right: 0, top: rowPct, transform: "translateY(-50%)" }}
         />
+
+        {/* Column resize handle */}
         <div
           onPointerDown={col.onPointerDown}
-          className="absolute top-0 bottom-0 w-1 cursor-col-resize -translate-x-1/2 z-30"
-          style={{ left: `calc(${colPct})` }}
+          className="absolute top-0 bottom-0 w-1 cursor-col-resize z-20 bg-detective-600/20 hover:bg-detective-accent/30 transition-colors"
+          style={{ left: colPct, transform: "translateX(-50%)" }}
         />
       </div>
     </div>
