@@ -53,7 +53,7 @@ class SpatialVisualizer(dai.node.HostNode):
             self.drawBoundingBoxes(depthFrameColor, detection)
             self.drawDetections(rgbFrame, detection, width, height)
 
-        cv2.imshow("Depth frame", depthFrameColor)
+        # cv2.imshow("Depth frame", depthFrameColor)
         cv2.imshow("Color frame", rgbFrame)
         if cv2.waitKey(1) == ord('q'):
             self.stopPipeline()

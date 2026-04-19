@@ -93,7 +93,7 @@ function resolveBackendConfig() {
 const BACKEND_CONFIG = resolveBackendConfig();
 
 export function getApiUrl(path = "") {
-  const fullPath = joinPath("//ai-detective-k-9gvw.onrender.com/api/camera-output", path);
+  const fullPath = joinPath("ai-detective-k-9gvw.onrender.com/api/camera-output", path);
   return BACKEND_CONFIG.httpOrigin
     ? `${BACKEND_CONFIG.httpOrigin}${fullPath}`
     : fullPath;
