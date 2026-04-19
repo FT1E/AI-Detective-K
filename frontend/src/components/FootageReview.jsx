@@ -157,13 +157,14 @@ export default function FootageReview({
         {imgContent != null ? (
           <>
             <img
+              src={imgContent}
               alt={`${viewMode} frame`}
               className="absolute inset-0 h-full w-full object-contain"
               style={{
                 transform: `scale(${zoom})`,
                 transformOrigin: "center center",
               }}
-            >{imgContent}</img>
+            ></img>
 
             <div
               className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${MODE_TINT[viewMode]}`}
