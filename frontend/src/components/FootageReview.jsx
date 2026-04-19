@@ -19,28 +19,52 @@ export default function FootageReview({
   syncing,
 }) {
   const [zoom, setZoom] = useState(1);
-  const [playbackFps, setPlaybackFps] = useState(20);
+  const [frameIndex, setFrameIndex] = useState(-1); // -1 = latest
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackFps, setPlaybackFps] = useState(10);
   const containerRef = useRef(null);
 
+  // Resolve which frame to show
+  let totalFrames = frames.length;
+  let displayIndex =
+    frameIndex < 0 || frameIndex >= totalFrames
+      ? totalFrames - 1
+      : frameIndex;
+  let currentFrame = totalFrames > 0 ? frames[displayIndex] : null;
 
-  let currentFrame = frames.length > 0 ? frames.pop() : null;
-
-  let getData = async () => {
+  const getData = async () => {
     new_data = await onVisionSync();
-    frames.push(new_data);
+    frames.push(new_data)
+    if(frames.length > 0) currentFrame = frames.pop();
   }
+
   // for setting the next frame
   useEffect(() => {
     setTimeout( () => {
       if(frames.length <= 0){
-        onVisionSync();
+        getData();
         return
       }
       currentFrame = frames.pop();
 
     }, 1000 / 30) // 30 times per second
-  }, [frames])
+  }, [currentFrame])
 
+  // Auto-follow latest when at the end
+  useEffect(() => {
+    if (isPlaying) return;
+    if (frameIndex < 0 || frameIndex >= totalFrames - 1) {
+      setFrameIndex(-1);
+    }
+  }, [totalFrames, frameIndex, isPlaying]);
+
+  
+
+  useEffect(() => {
+    if (totalFrames === 0 && isPlaying) {
+      setIsPlaying(false);
+    }
+  }, [totalFrames, isPlaying]);
 
   const imgContent = currentFrame
     ? viewMode === "depth" && currentFrame.depth_base64
@@ -54,6 +78,33 @@ export default function FootageReview({
     setZoom(Math.max(1, Math.min(2.5, Number(next))));
   };
 
+  const stepFrame = (delta) => {
+    setIsPlaying(false);
+    setFrameIndex((prev) => {
+      const current = prev < 0 ? totalFrames - 1 : prev;
+      const next = current + delta;
+      if (next < 0) return 0;
+      if (next >= totalFrames) return -1; // snap to latest
+      return next;
+    });
+  };
+
+  const togglePlayback = () => {
+    if (totalFrames === 0) return;
+    setIsPlaying((prev) => {
+      if (!prev && (frameIndex < 0 || frameIndex >= totalFrames - 1)) {
+        setFrameIndex(0);
+      }
+      return !prev;
+    });
+  };
+
+  const handleFrameScrub = (nextIndex) => {
+    setIsPlaying(false);
+    setFrameIndex(nextIndex);
+  };
+
+  const isLive = frameIndex < 0 || frameIndex >= totalFrames - 1;
 
   return (
     <div className="flex flex-col h-full">
@@ -63,18 +114,18 @@ export default function FootageReview({
           <h2 className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
             Footage
           </h2>
-          {frames.length > 0 && (
+          {totalFrames > 0 && (
             <span className="text-[10px] font-mono text-gray-500">
-              {frames.length} frames
+              {totalFrames} frames
             </span>
           )}
-          {frames.length > 1 && (
+          {isLive && totalFrames > 0 && (
             <span className="text-[9px] bg-detective-danger/15 text-detective-danger px-1.5 py-0.5 rounded border border-detective-danger/20 flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-detective-danger recording-pulse" />
               LIVE
             </span>
           )}
-          {frames.length > 1 && (
+          {isPlaying && totalFrames > 0 && (
             <span className="text-[9px] bg-detective-success/15 text-detective-success px-1.5 py-0.5 rounded border border-detective-success/20 flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-detective-success recording-pulse" />
               PLAYING
@@ -99,10 +150,7 @@ export default function FootageReview({
       </div>
 
       {/* Frame display */}
-      <div
-        ref={containerRef}
-        className="flex-1 relative bg-black overflow-hidden"
-      >
+      <div ref={containerRef} className="flex-1 relative bg-black overflow-hidden">
         {imgContent != null ? (
           <>
             <img
@@ -132,9 +180,7 @@ export default function FootageReview({
                 Frame {displayIndex + 1}/{totalFrames}
                 {currentFrame.timestamp && (
                   <span className="ml-2">
-                    {new Date(
-                      currentFrame.timestamp * 1000,
-                    ).toLocaleTimeString()}
+                    {new Date(currentFrame.timestamp * 1000).toLocaleTimeString()}
                   </span>
                 )}
               </div>
@@ -142,8 +188,7 @@ export default function FootageReview({
 
             {currentFrame?.detections?.length > 0 && (
               <div className="absolute right-2 bottom-2 rounded bg-black/60 px-2 py-1 text-[9px] text-gray-400">
-                {currentFrame.detections.length} detection
-                {currentFrame.detections.length !== 1 ? "s" : ""}
+                {currentFrame.detections.length} detection{currentFrame.detections.length !== 1 ? "s" : ""}
               </div>
             )}
           </>
@@ -168,8 +213,7 @@ export default function FootageReview({
               No Footage Loaded
             </p>
             <p className="mt-2 max-w-xs text-[11px] leading-relaxed text-gray-500">
-              Click Vision Sync Trigger to pull camera data from the backend and
-              run analysis.
+              Click Vision Sync Trigger to pull camera data from the backend and run analysis.
             </p>
             <button
               type="button"
@@ -180,9 +224,7 @@ export default function FootageReview({
               {syncing ? "Syncing..." : "Vision Sync Trigger"}
             </button>
             <div className="mt-3 flex items-center gap-2">
-              <div
-                className={`w-2 h-2 rounded-full ${backendConnected ? "bg-detective-success" : "bg-detective-danger"}`}
-              />
+              <div className={`w-2 h-2 rounded-full ${backendConnected ? "bg-detective-success" : "bg-detective-danger"}`} />
               <span className="text-[11px] text-gray-400">
                 {backendConnected ? "Backend online" : "Backend offline"}
               </span>
@@ -197,8 +239,8 @@ export default function FootageReview({
         <div className="flex items-center gap-1.5">
           <button
             type="button"
-            // onClick={togglePlayback}
-            disabled={frames.length === 0}
+            onClick={togglePlayback}
+            disabled={totalFrames === 0}
             className="h-6 px-2 rounded border border-detective-accent/30 bg-detective-accent/15 text-[10px] font-medium text-detective-accent transition-colors hover:bg-detective-accent/25 disabled:opacity-40 disabled:cursor-not-allowed"
             title={isPlaying ? "Pause playback" : "Play frames as video"}
           >
@@ -220,18 +262,8 @@ export default function FootageReview({
             className="h-6 w-6 rounded border border-detective-600/20 text-[10px] text-gray-400 transition-colors hover:text-gray-200 flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed"
             title="Previous frame"
           >
-            <svg
-              className="w-3 h-3"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 19l-7-7 7-7"
-              />
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
           <button
@@ -241,18 +273,8 @@ export default function FootageReview({
             className="h-6 w-6 rounded border border-detective-600/20 text-[10px] text-gray-400 transition-colors hover:text-gray-200 flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed"
             title="Next frame"
           >
-            <svg
-              className="w-3 h-3"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 5l7 7-7 7"
-              />
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </button>
           <button
@@ -344,9 +366,7 @@ export default function FootageReview({
             className="w-20 accent-detective-success"
             title="Playback FPS"
           />
-          <span className="text-[10px] text-gray-500 w-10">
-            {playbackFps} fps
-          </span>
+          <span className="text-[10px] text-gray-500 w-10">{playbackFps} fps</span>
         </div>
       </div>
     </div>

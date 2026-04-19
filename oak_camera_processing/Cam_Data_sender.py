@@ -36,6 +36,7 @@ class ApiSyncNode(dai.node.HostNode):
         # and significantly reduces the "Write Timeout" risk.
         encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 50]
         
+
         _, rgb_encoded = cv2.imencode('.jpg', rgb_frame, encode_param)
         depth_norm = cv2.normalize(depth_frame, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)
         depth_color = cv2.applyColorMap(depth_norm, cv2.COLORMAP_JET)
