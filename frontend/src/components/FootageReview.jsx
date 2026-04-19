@@ -21,6 +21,7 @@ export default function FootageReview({
   const [zoom, setZoom] = useState(1);
   const [frameIndex, setFrameIndex] = useState(-1); // -1 = latest
   const [isPlaying, setIsPlaying] = useState(true);
+  const [playbackFps, setPlaybackFps] = useState(10);
   const [currentFrame, setCurrentFrame] = useState(null);
   const containerRef = useRef(null);
   const framesRef = useRef(frames);
@@ -38,7 +39,7 @@ export default function FootageReview({
     onVisionSyncRef.current = onVisionSync;
   }, [onVisionSync]);
 
-  // Streaming loop: pop frames at 30fps (33ms interval)
+  // Streaming loop: pop frames at 30fps, fetch more when empty
   useEffect(() => {
     const tick = async () => {
       if (framesRef.current.length > 0) {
@@ -379,7 +380,18 @@ export default function FootageReview({
           <span className="text-[10px] font-mono text-gray-400 w-20 text-right">
             {totalFrames > 0 ? `${displayIndex + 1}/${totalFrames}` : "0/0"}
           </span>
-          <span className="text-[10px] text-gray-500">30 fps</span>
+          <input
+            type="range"
+            min="2"
+            max="24"
+            step="1"
+            value={playbackFps}
+            onChange={(e) => setPlaybackFps(Number(e.target.value))}
+            disabled={totalFrames === 0}
+            className="w-20 accent-detective-success"
+            title="Playback FPS"
+          />
+          <span className="text-[10px] text-gray-500 w-10">{playbackFps} fps</span>
         </div>
       </div>
     </div>
