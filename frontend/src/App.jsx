@@ -123,48 +123,40 @@ function Dashboard() {
   };
 
   const handleGenerateReport = () => {
-    const handleGenerateReport = () => {
-      // 1. Validation
-      if (!cameraSummary || cameraFrames.length === 0) return;
+    if (!cameraSummary) return;
 
-      // 2. Capture a static snapshot of the current live data
-      // We use structuredClone or spread to ensure we aren't pointing to live references
-      const snapshotSummary = JSON.parse(JSON.stringify(cameraSummary));
-      const snapshotEvents = JSON.parse(JSON.stringify(events));
+    // CAPTURE SNAPSHOT: Clone the current state so it stops updating at 30fps
+    const snapshotSummary = JSON.parse(JSON.stringify(cameraSummary));
+    const snapshotEvents = JSON.parse(JSON.stringify(events));
 
-      const classList =
-        snapshotSummary.classes?.map((c) => c.name).join(", ") || "no objects";
+    const classList =
+      snapshotSummary.classes?.map((c) => c.name).join(", ") || "no objects";
+    const closestLine = snapshotSummary.closest
+      ? ` Closest object was ${snapshotSummary.closest.name} at ${snapshotSummary.closest.distance.toFixed(2)} m.`
+      : "";
 
-      const closestLine = snapshotSummary.closest
-        ? ` Closest object was ${snapshotSummary.closest.name} at ${snapshotSummary.closest.distance.toFixed(2)} m.`
-        : "";
-
-      // 3. Set the report with its own internal copy of the data
-      setReport({
-        case_id: `CASE-${Date.now().toString(36).toUpperCase()}`,
-        observation_window: { event_count: snapshotEvents.length },
-        threat_assessment: { level: "moderate", label: "Routine observation" },
-        // Use the snapshot values for the narrative
-        narrative:
-          `Captured ${snapshotSummary.totalFrames} frames across ${snapshotSummary.classes.length} object type(s): ${classList}.${closestLine}`.trim(),
-        key_findings: snapshotEvents.slice(0, 5).map((ev) => ({
-          finding: ev.summary,
-          significance: "",
-        })),
-        recommendation:
-          "Review the event timeline and annotate findings manually.",
-
-        capturedSummary: snapshotSummary,
-        capturedEvents: snapshotEvents,
-      });
-    };
+    setReport({
+      case_id: `CASE-${Date.now().toString(36).toUpperCase()}`,
+      observation_window: { event_count: snapshotEvents.length },
+      threat_assessment: { level: "moderate", label: "Routine observation" },
+      narrative:
+        `Captured ${snapshotSummary.totalFrames} frames across ${snapshotSummary.classes.length} object type(s): ${classList}.${closestLine}`.trim(),
+      key_findings: snapshotEvents.slice(0, 5).map((ev) => ({
+        finding: ev.summary,
+        significance: "",
+      })),
+      recommendation:
+        "Review the event timeline and annotate findings manually.",
+      // Store snapshots locally in the report object
+      capturedSummary: snapshotSummary,
+      capturedEvents: snapshotEvents,
+    });
   };
 
   const cameraSummary = useMemo(
     () => summarizeFrames(cameraFrames),
     [cameraFrames],
   );
-
   const events = useMemo(() => extractEvents(cameraFrames), [cameraFrames]);
 
   const cameraContext = useMemo(() => {
@@ -177,7 +169,6 @@ function Dashboard() {
   }, [cameraSummary, events, cameraFrames]);
 
   const phase = "idle";
-
   const [topRightView, setTopRightView] = useState("report");
 
   const colPct = `${col.ratio * 100}%`;
@@ -233,7 +224,6 @@ function Dashboard() {
           <button
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
             className="p-1.5 rounded-lg border border-detective-600/30 bg-detective-800/60 text-gray-400 hover:text-gray-200 hover:border-detective-accent/30 transition-colors"
-            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
           >
             {theme === "dark" ? <SunIcon /> : <MoonIcon />}
           </button>
@@ -253,14 +243,12 @@ function Dashboard() {
         {/* Cell (1,1) — Footage */}
         <div className="min-w-0 min-h-0 overflow-hidden border-r border-b border-detective-600/30 bg-detective-900 p-2">
           <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleVisionSync}
-                className="px-3 py-1 text-xs rounded-lg bg-detective-accent/20 text-detective-accent border border-detective-accent/30 hover:bg-detective-accent/30 transition"
-              >
-                Sync
-              </button>
-            </div>
+            <button
+              onClick={handleVisionSync}
+              className="px-3 py-1 text-xs rounded-lg bg-detective-accent/20 text-detective-accent border border-detective-accent/30 hover:bg-detective-accent/30 transition"
+            >
+              Sync
+            </button>
           </div>
           <div className="h-full">
             <FootageReview
@@ -284,14 +272,12 @@ function Dashboard() {
               <button
                 onClick={() => setTopRightView("report")}
                 className={`px-2 py-1 text-xs rounded ${topRightView === "report" ? "bg-detective-accent text-white" : "bg-detective-800 text-gray-300"}`}
-                title="Show report"
               >
                 Report
               </button>
               <button
                 onClick={() => setTopRightView("scene")}
                 className={`px-2 py-1 text-xs rounded ${topRightView === "scene" ? "bg-detective-accent text-white" : "bg-detective-800 text-gray-300"}`}
-                title="Show 3D scene"
               >
                 3D
               </button>
@@ -315,15 +301,12 @@ function Dashboard() {
           </div>
         </div>
 
-        {/* Cell (2,1) — Bottom-left: AI Detective chat */}
+        {/* Cell (2,1) — AI Detective chat */}
         <div
           className="min-w-0 min-h-0 overflow-hidden border-r border-detective-600/30 bg-detective-900 p-2"
           style={{ gridRow: "1 / span 2" }}
         >
           <div className="flex items-center justify-between mb-2">
-            {/* <h2 className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
-              AI Detective
-            </h2>*/}
             <div className="text-xs text-gray-500">Phase: {phase}</div>
           </div>
           <div className="h-full">

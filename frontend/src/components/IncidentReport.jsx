@@ -93,43 +93,21 @@ function IdleState({ cameraSummary, events, onGenerate }) {
             onClick={onGenerate}
             className="w-full px-3 py-2 text-xs font-semibold rounded-lg bg-detective-accent/20 text-detective-accent border border-detective-accent/30 hover:bg-detective-accent/30 transition"
           >
-            Generate Report (last 30 frames)
+            Generate Report (Snapshot)
           </button>
         </div>
       )}
       {cameraSummary && (
         <div className="p-4 border-b border-detective-600/20">
-          <CameraSummarySection summary={cameraSummary} />
+          <CameraSummarySection
+            summary={cameraSummary}
+            title="Live Sensor Detections"
+          />
         </div>
       )}
       {events && events.length > 0 && (
         <div className="p-4 border-b border-detective-600/20">
-          <EventsTimeline events={events} />
-        </div>
-      )}
-      {!hasData && (
-        <div className="flex-1 flex flex-col items-center justify-center text-center px-8 py-10">
-          <svg
-            className="w-12 h-12 text-detective-600 mb-3"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={0.75}
-              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-            />
-          </svg>
-          <h3 className="text-sm font-semibold text-gray-300 mb-2">
-            Investigation Report
-          </h3>
-          <p className="text-xs text-gray-500 max-w-sm leading-relaxed">
-            Click <span className="text-detective-accent">Sync</span> to pull
-            the latest OAK-D frames. The summary, event timeline, and AI
-            analysis will appear here.
-          </p>
+          <EventsTimeline events={events} title="Live Timeline" />
         </div>
       )}
     </div>
@@ -138,40 +116,19 @@ function IdleState({ cameraSummary, events, onGenerate }) {
 
 function formatDistance(m) {
   if (m == null) return "—";
-  if (m < 1) return `${(m * 100).toFixed(0)} cm`;
-  return `${m.toFixed(2)} m`;
+  return m < 1 ? `${(m * 100).toFixed(0)} cm` : `${m.toFixed(2)} m`;
 }
 
-function formatDuration(seconds) {
-  if (seconds == null) return null;
-  if (seconds < 60) return `${seconds.toFixed(1)}s`;
-  const m = Math.floor(seconds / 60);
-  const s = Math.round(seconds % 60);
-  return `${m}m ${s}s`;
-}
-
-function CameraSummarySection({ summary }) {
-  const { totalFrames, duration, classes, closest, pairs } = summary;
-  const durationLabel = formatDuration(duration);
-
+function CameraSummarySection({ summary, title = "Sensor Detections" }) {
+  const { totalFrames, classes, closest, pairs } = summary;
   return (
     <div>
-      <SectionHeader label="Live Sensor Detections" />
+      <SectionHeader label={title} />
       <div className="bg-detective-800/40 rounded-xl p-3 border border-detective-600/15">
         <div className="flex flex-wrap items-center gap-3 text-[10px] text-gray-400 mb-3">
           <span>
             <span className="font-mono text-gray-200">{totalFrames}</span>{" "}
             frames
-          </span>
-          {durationLabel && (
-            <span>
-              · <span className="font-mono text-gray-200">{durationLabel}</span>{" "}
-              span
-            </span>
-          )}
-          <span>
-            · <span className="font-mono text-gray-200">{classes.length}</span>{" "}
-            object type{classes.length !== 1 ? "s" : ""}
           </span>
           {closest && (
             <span className="ml-auto text-detective-accent">
@@ -180,74 +137,40 @@ function CameraSummarySection({ summary }) {
             </span>
           )}
         </div>
-        {classes.length === 0 ? (
-          <p className="text-[11px] text-gray-500 italic">
-            No objects detected in the synced frames.
-          </p>
-        ) : (
-          <div className="grid grid-cols-2 gap-2">
-            {classes.map((c) => (
-              <div
-                key={c.label}
-                className="rounded-lg p-2 border border-detective-600/20 bg-detective-900/40"
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-medium text-gray-200 capitalize">
-                    {c.name}
-                  </span>
-                  <span className="text-[9px] font-mono text-detective-accent bg-detective-accent/10 px-1.5 py-0.5 rounded">
-                    {Math.round(c.maxConf * 100)}%
-                  </span>
-                </div>
-                <div className="flex items-center gap-3 text-[10px] text-gray-500 font-mono">
-                  <span>{c.frameCount}f</span>
-                  <span>{c.detectionCount}det</span>
-                  <span className="ml-auto text-gray-300">
-                    {c.minDistance != null
-                      ? `${formatDistance(c.minDistance)}${c.maxDistance != null && c.maxDistance !== c.minDistance ? `–${formatDistance(c.maxDistance)}` : ""}`
-                      : "no depth"}
-                  </span>
-                </div>
+        <div className="grid grid-cols-2 gap-2">
+          {classes.map((c) => (
+            <div
+              key={c.label}
+              className="rounded-lg p-2 border border-detective-600/20 bg-detective-900/40"
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-medium text-gray-200 capitalize">
+                  {c.name}
+                </span>
+                <span className="text-[9px] font-mono text-detective-accent bg-detective-accent/10 px-1.5 py-0.5 rounded">
+                  {Math.round(c.maxConf * 100)}%
+                </span>
               </div>
-            ))}
-          </div>
-        )}
-
-        {pairs && pairs.length > 0 && (
-          <div className="mt-3 pt-3 border-t border-detective-600/15">
-            <div className="text-[9px] uppercase tracking-widest text-gray-500 font-semibold mb-1.5">
-              Inter-object proximity
+              <div className="text-[10px] text-gray-500 font-mono flex justify-between">
+                <span>{c.frameCount}f</span>
+                <span>
+                  {c.minDistance != null
+                    ? formatDistance(c.minDistance)
+                    : "no depth"}
+                </span>
+              </div>
             </div>
-            <ul className="space-y-1">
-              {pairs.slice(0, 6).map((p) => (
-                <li
-                  key={`${p.a}|${p.b}`}
-                  className="flex items-center gap-2 text-[11px] text-gray-400"
-                >
-                  <span className="capitalize text-gray-200">{p.nameA}</span>
-                  <span className="text-gray-600">↔</span>
-                  <span className="capitalize text-gray-200">{p.nameB}</span>
-                  <span className="ml-auto font-mono text-detective-accent">
-                    {formatDistance(p.minDist)}
-                    {p.maxDist !== p.minDist
-                      ? `–${formatDistance(p.maxDist)}`
-                      : ""}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+          ))}
+        </div>
       </div>
     </div>
   );
 }
 
-function EventsTimeline({ events }) {
-  if (!events || events.length === 0) return null;
+function EventsTimeline({ events, title = "Event Timeline" }) {
   return (
     <div>
-      <SectionHeader label="Event Timeline" />
+      <SectionHeader label={title} />
       <div className="bg-detective-800/40 rounded-xl p-3 border border-detective-600/15">
         <ol className="space-y-1.5">
           {events.map((ev, i) => {
@@ -277,7 +200,6 @@ function EventsTimeline({ events }) {
 
 export default function IncidentReport({
   report,
-  phase,
   analyzing,
   eventCount,
   onReportUpdate,
@@ -285,11 +207,18 @@ export default function IncidentReport({
   cameraSummary,
   events,
 }) {
-  // Show analyzing state only during report generation
-  if (analyzing) return <AnalyzingState eventCount={eventCount} />;
+  const [narrativeDraft, setNarrativeDraft] = useState("");
+  const [currentCaseId, setCurrentCaseId] = useState(null);
 
-  // Show idle state when no report exists
-  if (!report) {
+  useEffect(() => {
+    if (report && report.case_id !== currentCaseId) {
+      setNarrativeDraft(report.narrative || "");
+      setCurrentCaseId(report.case_id);
+    }
+  }, [report?.case_id, currentCaseId]);
+
+  if (analyzing) return <AnalyzingState eventCount={eventCount} />;
+  if (!report)
     return (
       <IdleState
         cameraSummary={cameraSummary}
@@ -297,35 +226,22 @@ export default function IncidentReport({
         onGenerate={onGenerate}
       />
     );
-  }
 
+  // USE SNAPSHOT DATA FOR REPORT VIEW (STOPS THE LOOP)
   const displaySummary = report.capturedSummary;
   const displayEvents = report.capturedEvents;
-
-  // Show report view
   const threat =
     THREAT_STYLES[report.threat_assessment?.level] || THREAT_STYLES.moderate;
-  const [narrativeDraft, setNarrativeDraft] = useState("");
-  const [currentCaseId, setCurrentCaseId] = useState(null);
 
   const updateField = (path, value) => {
     if (!onReportUpdate) return;
     const updated = JSON.parse(JSON.stringify(report));
     const keys = path.split(".");
     let obj = updated;
-    for (let i = 0; i < keys.length - 1; i++) {
-      obj = obj[keys[i]];
-    }
+    for (let i = 0; i < keys.length - 1; i++) obj = obj[keys[i]];
     obj[keys[keys.length - 1]] = value;
     onReportUpdate(updated);
   };
-
-  useEffect(() => {
-    if (report && report.case_id !== currentCaseId) {
-      setNarrativeDraft(report.narrative || "");
-      setCurrentCaseId(report.case_id);
-    }
-  }, [report?.case_id]);
 
   return (
     <div className="flex flex-col h-full">
@@ -338,18 +254,23 @@ export default function IncidentReport({
             {report.case_id}
           </span>
         </div>
-        <div className="flex items-center gap-3 text-[10px] text-gray-500">
-          <span>{report.observation_window?.event_count || 0} events</span>
-          <span className="text-[9px] text-detective-accent/50">
-            click to edit
-          </span>
-        </div>
+        <button
+          onClick={onGenerate}
+          className="text-[10px] text-detective-accent hover:underline"
+        >
+          Regenerate
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {displaySummary && <CameraSummarySection summary={displaySummary} />}
-        {displayEvents && displayEvents.length > 0 && (
-          <EventsTimeline events={displayEvents} />
+        {displaySummary && (
+          <CameraSummarySection
+            summary={displaySummary}
+            title="Captured Sensor Data"
+          />
+        )}
+        {displayEvents && (
+          <EventsTimeline events={displayEvents} title="Incident Timeline" />
         )}
 
         {report.threat_assessment && (
@@ -371,80 +292,19 @@ export default function IncidentReport({
               value={narrativeDraft}
               onChange={setNarrativeDraft}
               multiline
-              className="text-sm text-gray-300 leading-relaxed"
+              className="text-sm text-gray-300"
             />
             <div className="mt-2 flex justify-end">
               <button
-                type="button"
                 onClick={() => updateField("narrative", narrativeDraft)}
                 disabled={narrativeDraft === (report.narrative || "")}
-                className="rounded-lg border border-detective-accent/30 bg-detective-accent/15 px-3 py-1.5 text-[11px] font-medium text-detective-accent transition-colors hover:bg-detective-accent/25 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="rounded-lg border border-detective-accent/30 bg-detective-accent/15 px-3 py-1.5 text-[11px] font-medium text-detective-accent disabled:opacity-30"
               >
-                Apply Narrative
+                Apply Changes
               </button>
             </div>
           </div>
         </div>
-
-        {report.key_findings?.length > 0 && (
-          <div>
-            <SectionHeader label="Key Findings" />
-            <div className="space-y-2">
-              {report.key_findings.map((finding, i) => (
-                <div
-                  key={i}
-                  className="bg-detective-800/40 rounded-xl p-3 border border-detective-600/15"
-                >
-                  <div className="flex items-start gap-2">
-                    <div className="w-5 h-5 rounded-full bg-detective-accent/10 border border-detective-accent/20 flex items-center justify-center shrink-0 mt-0.5">
-                      <span className="text-[9px] font-bold text-detective-accent">
-                        {i + 1}
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <EditableField
-                        value={finding.finding}
-                        onChange={(val) => {
-                          const findings = [...report.key_findings];
-                          findings[i] = { ...findings[i], finding: val };
-                          updateField("key_findings", findings);
-                        }}
-                        className="text-xs font-medium text-gray-200"
-                      />
-                      <EditableField
-                        value={finding.significance}
-                        onChange={(val) => {
-                          const findings = [...report.key_findings];
-                          findings[i] = { ...findings[i], significance: val };
-                          updateField("key_findings", findings);
-                        }}
-                        multiline
-                        className="text-[11px] text-gray-400 leading-relaxed mt-1"
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {report.recommendation && (
-          <div>
-            <SectionHeader label="Recommendation" />
-            <div
-              className={`rounded-xl p-3 border ${threat.bg} ${threat.border}`}
-            >
-              <EditableField
-                value={report.recommendation}
-                multiline
-                className={`text-xs leading-relaxed ${threat.text}`}
-              />
-            </div>
-          </div>
-        )}
-
-        <div className="h-2" />
       </div>
     </div>
   );
