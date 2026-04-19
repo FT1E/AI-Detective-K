@@ -2,7 +2,7 @@ import { Router } from "express";
 
 const router = Router();
 
-const store = [];
+let store = [];
 
 router.post("/camera-output", (req, res) => {
   const entry = { ...req.body, received_at: new Date().toISOString() };
@@ -21,7 +21,6 @@ router.post("/camera-output", (req, res) => {
 
 router.get("/camera-output", (_req, res) => {
   res.json(store);
-  store = []
 });
 
 export default router;
