@@ -6,16 +6,10 @@ import { WebSocketServer } from "ws";
 
 import caseRouter from "./routes/case.js";
 import analysisRouter from "./routes/analysis.js";
-<<<<<<< HEAD
 import investigateRouter from "./routes/investigate.js";
 import eventsRouter, { handleWebSocket } from "./routes/events.js";
 import cameraOutputRouter from "./routes/cameraOutput.js";
-=======
-
-import investigateRouter from "./routes/investigate.js";
-import cameraPayloadRouter from "./routes/cameraPayload.js";
-import eventsRouter, { handleWebSocket } from "./routes/events.js";
->>>>>>> origin/dev
+import ingestRouter from "./routes/ingest.js";
 
 const app = express();
 const server = createServer(app);
@@ -30,6 +24,7 @@ app.use("/api", analysisRouter);
 app.use("/api", investigateRouter);
 app.use("/api", eventsRouter);
 app.use("/api", cameraOutputRouter);
+app.use("/api", ingestRouter);
 
 // WebSocket — /ws/events
 const wss = new WebSocketServer({ server, path: "/ws/events" });
