@@ -11,35 +11,38 @@ function useResize(initial, axis) {
   const containerRef = useRef(null);
   const dragging = useRef(false);
 
-  const onPointerDown = useCallback((e) => {
-    e.preventDefault();
-    dragging.current = true;
-    document.body.style.cursor = axis === "col" ? "col-resize" : "row-resize";
-    document.body.style.userSelect = "none";
+  const onPointerDown = useCallback(
+    (e) => {
+      e.preventDefault();
+      dragging.current = true;
+      document.body.style.cursor = axis === "col" ? "col-resize" : "row-resize";
+      document.body.style.userSelect = "none";
 
-    const move = (ev) => {
-      if (!dragging.current || !containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      let next;
-      if (axis === "col") {
-        next = (ev.clientX - rect.left) / rect.width;
-      } else {
-        next = (ev.clientY - rect.top) / rect.height;
-      }
-      setRatio(Math.max(0.2, Math.min(0.8, next)));
-    };
+      const move = (ev) => {
+        if (!dragging.current || !containerRef.current) return;
+        const rect = containerRef.current.getBoundingClientRect();
+        let next;
+        if (axis === "col") {
+          next = (ev.clientX - rect.left) / rect.width;
+        } else {
+          next = (ev.clientY - rect.top) / rect.height;
+        }
+        setRatio(Math.max(0.2, Math.min(0.8, next)));
+      };
 
-    const up = () => {
-      dragging.current = false;
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-    };
+      const up = () => {
+        dragging.current = false;
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+      };
 
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
-  }, [axis]);
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+    },
+    [axis],
+  );
 
   return { ratio, containerRef, onPointerDown };
 }
@@ -47,16 +50,36 @@ function useResize(initial, axis) {
 /* ── Theme icons ── */
 function SunIcon() {
   return (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+    <svg
+      className="w-4 h-4"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
+      />
     </svg>
   );
 }
 
 function MoonIcon() {
   return (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+    <svg
+      className="w-4 h-4"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
+      />
     </svg>
   );
 }
@@ -70,6 +93,7 @@ function Dashboard() {
   const [theme, setTheme] = useState("dark");
   const [cameraFrames, setCameraFrames] = useState([]);
 
+  // Controls for split ratio — re-used to allow drag resizing of grid rows/cols
   const col = useResize(0.5, "col");
   const row = useResize(0.5, "row");
 
@@ -124,8 +148,16 @@ function Dashboard() {
         ? "reviewing"
         : "idle";
 
+  // Layout toggles for right cells: "report" | "scene"
+  const [topRightView, setTopRightView] = useState("report");
+  const [bottomRightView, setBottomRightView] = useState("report");
+
   const colPct = `${col.ratio * 100}%`;
   const rowPct = `${row.ratio * 100}%`;
+
+  // CSS grid template using the resize ratios
+  const gridTemplateColumns = `${colPct} 1fr`;
+  const gridTemplateRows = `${rowPct} 1fr`;
 
   return (
     <div className="h-screen flex flex-col bg-detective-900">
@@ -156,7 +188,9 @@ function Dashboard() {
             </div>
           )}
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${backendConnected ? "bg-detective-success" : "bg-detective-danger"}`} />
+            <div
+              className={`w-2 h-2 rounded-full ${backendConnected ? "bg-detective-success" : "bg-detective-danger"}`}
+            />
             <span className="text-gray-400 text-xs">
               {backendConnected ? "Backend Online" : "Backend Offline"}
             </span>
@@ -164,7 +198,9 @@ function Dashboard() {
           {syncing && (
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-detective-warn recording-pulse" />
-              <span className="text-detective-warn font-medium text-xs">SYNCING</span>
+              <span className="text-detective-warn font-medium text-xs">
+                SYNCING
+              </span>
             </div>
           )}
           <button
@@ -177,9 +213,33 @@ function Dashboard() {
         </div>
       </header>
 
-      <div ref={col.containerRef} className="flex-1 flex flex-col overflow-hidden relative">
-        <div style={{ height: rowPct }} className="flex shrink-0 min-h-0">
-          <div style={{ width: colPct }} className="shrink-0 min-w-0 overflow-hidden border-r border-detective-600/30">
+      {/* Grid layout: 2 columns x 2 rows */}
+      <div
+        ref={col.containerRef}
+        className="flex-1 relative overflow-hidden"
+        style={{
+          display: "grid",
+          gridTemplateColumns,
+          gridTemplateRows,
+          gap: "8px",
+        }}
+      >
+        {/* Cell (1,1) — Footage (top-left) */}
+        <div className="min-w-0 min-h-0 overflow-hidden border-r border-b border-detective-600/30 bg-detective-900 p-2">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
+              Footage
+            </h2>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleVisionSync}
+                className="px-3 py-1 text-xs rounded-lg bg-detective-accent/20 text-detective-accent border border-detective-accent/30 hover:bg-detective-accent/30 transition"
+              >
+                Sync
+              </button>
+            </div>
+          </div>
+          <div className="h-full">
             <FootageReview
               frames={cameraFrames}
               viewMode={viewMode}
@@ -189,39 +249,73 @@ function Dashboard() {
               syncing={syncing}
             />
           </div>
-          <div className="flex-1 min-w-0 overflow-hidden">
-            <SceneCanvas3D />
+        </div>
+
+        {/* Cell (1,2) — Top-right: toggle between Report and 3D Scene */}
+        <div className="min-w-0 min-h-0 overflow-hidden border-b border-detective-600/30 bg-detective-900 p-2">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
+              {topRightView === "report" ? "Investigation Report" : "3D Scene"}
+            </h2>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setTopRightView("report")}
+                className={`px-2 py-1 text-xs rounded ${topRightView === "report" ? "bg-detective-accent text-white" : "bg-detective-800 text-gray-300"}`}
+                title="Show report"
+              >
+                Report
+              </button>
+              <button
+                onClick={() => setTopRightView("scene")}
+                className={`px-2 py-1 text-xs rounded ${topRightView === "scene" ? "bg-detective-accent text-white" : "bg-detective-800 text-gray-300"}`}
+                title="Show 3D scene"
+              >
+                3D
+              </button>
+            </div>
+          </div>
+          <div className="h-full">
+            {topRightView === "report" ? (
+              <IncidentReport
+                report={report}
+                phase={phase}
+                analyzing={syncing}
+                eventCount={events.length}
+                onReportUpdate={handleReportUpdate}
+              />
+            ) : (
+              <SceneCanvas3D />
+            )}
           </div>
         </div>
 
-        <div
-          onPointerDown={row.onPointerDown}
-          className="resize-handle-row h-1 shrink-0 bg-detective-600/20 hover:bg-detective-accent/30 transition-colors z-10"
-        />
-
-        <div className="flex flex-1 min-h-0">
-          <div style={{ width: colPct }} className="shrink-0 min-w-0 overflow-hidden border-r border-detective-600/30">
+        {/* Cell (2,1) — Bottom-left: AI Detective chat */}
+        <div className="min-w-0 min-h-0 overflow-hidden border-r border-detective-600/30 bg-detective-900 p-2">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
+              AI Detective
+            </h2>
+            <div className="text-xs text-gray-500">Phase: {phase}</div>
+          </div>
+          <div className="h-full">
             <DetectiveChat
               caseData={caseData}
               report={report}
               onReportUpdate={handleReportUpdate}
             />
           </div>
-          <div className="flex-1 min-w-0 overflow-hidden">
-            <IncidentReport
-              report={report}
-              phase={phase}
-              analyzing={syncing}
-              eventCount={events.length}
-              onReportUpdate={handleReportUpdate}
-            />
-          </div>
         </div>
 
+        {/* Resize handles: horizontal and vertical */}
+        <div
+          onPointerDown={row.onPointerDown}
+          className="absolute left-0 right-0 h-1 cursor-row-resize -translate-y-1/2 z-30"
+          style={{ top: `calc(${rowPct})` }}
+        />
         <div
           onPointerDown={col.onPointerDown}
-          className="resize-handle-col absolute top-0 bottom-0 w-1 bg-detective-600/20 hover:bg-detective-accent/30 transition-colors z-20"
-          style={{ left: colPct, transform: "translateX(-50%)" }}
+          className="absolute top-0 bottom-0 w-1 cursor-col-resize -translate-x-1/2 z-30"
+          style={{ left: `calc(${colPct})` }}
         />
       </div>
     </div>
