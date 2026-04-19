@@ -19,51 +19,28 @@ export default function FootageReview({
   syncing,
 }) {
   const [zoom, setZoom] = useState(1);
-  const [frameIndex, setFrameIndex] = useState(-1); // -1 = latest
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackFps, setPlaybackFps] = useState(10);
+  const [playbackFps, setPlaybackFps] = useState(20);
   const containerRef = useRef(null);
 
-  // Resolve which frame to show
-  let totalFrames = frames.length;
-  let displayIndex =
-    frameIndex < 0 || frameIndex >= totalFrames ? totalFrames - 1 : frameIndex;
-  let currentFrame = totalFrames > 0 ? frames[displayIndex] : null;
 
-  // useEffect(() => {
-  //   setTimeout(() => {
-  //     if(displayIndex == totalFrames) return;
-  //     displayIndex++;
-  //     currentFrame = frames[displayIndex]
-  //   })
-  // }, [currentFrame])
+  let currentFrame = frames.length > 0 ? frames.pop() : null;
 
+  let getData = async () => {
+    new_data = await onVisionSync();
+    frames.push(new_data);
+  }
   // for setting the next frame
   useEffect(() => {
     setTimeout( () => {
       if(frames.length <= 0){
-        frames.push(onVisionSync())
+        onVisionSync();
+        return
       }
       currentFrame = frames.pop();
 
     }, 1000 / 30) // 30 times per second
-  }, [currentFrame])
+  }, [frames])
 
-  // Auto-follow latest when at the end
-  useEffect(() => {
-    if (isPlaying) return;
-    if (frameIndex < 0 || frameIndex >= totalFrames - 1) {
-      setFrameIndex(-1);
-    }
-  }, [totalFrames, frameIndex, isPlaying]);
-
-  
-
-  useEffect(() => {
-    if (totalFrames === 0 && isPlaying) {
-      setIsPlaying(false);
-    }
-  }, [totalFrames, isPlaying]);
 
   const imgContent = currentFrame
     ? viewMode === "depth" && currentFrame.depth_base64
@@ -77,33 +54,6 @@ export default function FootageReview({
     setZoom(Math.max(1, Math.min(2.5, Number(next))));
   };
 
-  const stepFrame = (delta) => {
-    setIsPlaying(false);
-    setFrameIndex((prev) => {
-      const current = prev < 0 ? totalFrames - 1 : prev;
-      const next = current + delta;
-      if (next < 0) return 0;
-      if (next >= totalFrames) return -1; // snap to latest
-      return next;
-    });
-  };
-
-  const togglePlayback = () => {
-    if (totalFrames === 0) return;
-    setIsPlaying((prev) => {
-      if (!prev && (frameIndex < 0 || frameIndex >= totalFrames - 1)) {
-        setFrameIndex(0);
-      }
-      return !prev;
-    });
-  };
-
-  const handleFrameScrub = (nextIndex) => {
-    setIsPlaying(false);
-    setFrameIndex(nextIndex);
-  };
-
-  const isLive = frameIndex < 0 || frameIndex >= totalFrames - 1;
 
   return (
     <div className="flex flex-col h-full">
@@ -113,18 +63,18 @@ export default function FootageReview({
           <h2 className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
             Footage
           </h2>
-          {totalFrames > 0 && (
+          {frames.length > 0 && (
             <span className="text-[10px] font-mono text-gray-500">
-              {totalFrames} frames
+              {frames.length} frames
             </span>
           )}
-          {isLive && totalFrames > 0 && (
+          {frames.length > 1 && (
             <span className="text-[9px] bg-detective-danger/15 text-detective-danger px-1.5 py-0.5 rounded border border-detective-danger/20 flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-detective-danger recording-pulse" />
               LIVE
             </span>
           )}
-          {isPlaying && totalFrames > 0 && (
+          {frames.length > 1 && (
             <span className="text-[9px] bg-detective-success/15 text-detective-success px-1.5 py-0.5 rounded border border-detective-success/20 flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-detective-success recording-pulse" />
               PLAYING
@@ -247,8 +197,8 @@ export default function FootageReview({
         <div className="flex items-center gap-1.5">
           <button
             type="button"
-            onClick={togglePlayback}
-            disabled={totalFrames === 0}
+            // onClick={togglePlayback}
+            disabled={frames.length === 0}
             className="h-6 px-2 rounded border border-detective-accent/30 bg-detective-accent/15 text-[10px] font-medium text-detective-accent transition-colors hover:bg-detective-accent/25 disabled:opacity-40 disabled:cursor-not-allowed"
             title={isPlaying ? "Pause playback" : "Play frames as video"}
           >
