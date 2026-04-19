@@ -287,7 +287,7 @@ export default function IncidentReport({
 }) {
   // Show analyzing state only during report generation
   if (analyzing) return <AnalyzingState eventCount={eventCount} />;
-  
+
   // Show idle state when no report exists
   if (!report)
     return (
@@ -354,29 +354,27 @@ export default function IncidentReport({
           </div>
         )}
 
-        {report.narrative && (
-          <div>
-            <SectionHeader label="Incident Narrative" />
-            <div className="bg-detective-800/40 rounded-xl p-3 border border-detective-600/15">
-              <EditableField
-                value={narrativeDraft}
-                onChange={setNarrativeDraft}
-                multiline
-                className="text-sm text-gray-300 leading-relaxed"
-              />
-              <div className="mt-2 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => updateField("narrative", narrativeDraft)}
-                  disabled={narrativeDraft === (report.narrative || "")}
-                  className="rounded-lg border border-detective-accent/30 bg-detective-accent/15 px-3 py-1.5 text-[11px] font-medium text-detective-accent transition-colors hover:bg-detective-accent/25 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Apply Narrative
-                </button>
-              </div>
+        <div>
+          <SectionHeader label="Incident Narrative" />
+          <div className="bg-detective-800/40 rounded-xl p-3 border border-detective-600/15">
+            <EditableField
+              value={narrativeDraft}
+              onChange={setNarrativeDraft}
+              multiline
+              className="text-sm text-gray-300 leading-relaxed"
+            />
+            <div className="mt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => updateField("narrative", narrativeDraft)}
+                disabled={narrativeDraft === (report.narrative || "")}
+                className="rounded-lg border border-detective-accent/30 bg-detective-accent/15 px-3 py-1.5 text-[11px] font-medium text-detective-accent transition-colors hover:bg-detective-accent/25 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Apply Narrative
+              </button>
             </div>
           </div>
-        )}
+        </div>
 
         {report.key_findings?.length > 0 && (
           <div>
