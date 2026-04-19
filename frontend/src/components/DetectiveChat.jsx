@@ -364,11 +364,6 @@ export default function DetectiveChat({ cameraContext }) {
   if (!investigating) {
     return (
       <div className="flex flex-col h-full">
-        <div className="flex items-center justify-between px-4 py-2.5 bg-detective-800/50 border-b border-detective-600/20 shrink-0">
-          <h2 className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
-            AI Detective
-          </h2>
-        </div>
         <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
           <div className="w-14 h-14 rounded-full bg-gradient-to-br from-detective-accent/20 to-blue-600/20 border border-detective-accent/30 flex items-center justify-center mb-4">
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-detective-accent to-blue-600 flex items-center justify-center">
@@ -389,7 +384,9 @@ export default function DetectiveChat({ cameraContext }) {
           {/* Camera sync card */}
           <div className="w-full bg-detective-800/40 rounded-xl p-3.5 border border-detective-600/15 mb-4 text-left">
             <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-2">
-              {hasCameraData ? "Camera Context Ready" : "Waiting for Camera Data"}
+              {hasCameraData
+                ? "Camera Context Ready"
+                : "Waiting for Camera Data"}
             </div>
             {hasCameraData ? (
               <div className="space-y-1.5 text-[11px]">
