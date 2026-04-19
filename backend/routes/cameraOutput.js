@@ -4,20 +4,24 @@ const router = Router();
 
 let store = [];
 
-
-const MAX_FRAMES = 30
+const MAX_FRAMES = 30;
 
 router.post("/camera-output", (req, res) => {
-  const entry = { ...req.body, received_at: new Date().toISOString() };
-  store.push(entry);
-  if (store.length > MAX_FRAMES){
-    store = store.slice(-MAX_FRAMES)    
+  const received_at = new Date().toISOString();
+  const frames = Array.isArray(req.body) ? req.body : [req.body];
+
+  for (const frame of frames) {
+    store.push({ ...frame, received_at });
+  }
+  if (store.length > MAX_FRAMES) {
+    store = store.slice(-MAX_FRAMES);
   }
 
   res.json({
     status: "ok",
-    index: store.length - 1,
-    received_at: entry.received_at,
+    count: frames.length,
+    total: store.length,
+    received_at,
   });
 });
 
