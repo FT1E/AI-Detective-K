@@ -34,7 +34,10 @@ export default function FootageReview({
 
   useEffect(() => {
     setTimeout(() => {
-      if(displayIndex == totalFrames) return;
+      if(displayIndex == totalFrames){
+        onVisionSync();
+        displayIndex = -1
+      }
       displayIndex++;
       currentFrame = frames[displayIndex]
     })
