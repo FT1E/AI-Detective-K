@@ -78,7 +78,7 @@ class ApiSyncNode(dai.node.HostNode):
                 self.last_60_frames.pop()
 
         except Exception as e:
-            print(f"Sync API Error: {e}")
+            print(f"Error while sending post request: {e}")
 
 with dai.Pipeline() as p:
     fps = 20
