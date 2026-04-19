@@ -290,7 +290,10 @@ function Dashboard() {
         </div>
 
         {/* Cell (2,1) — Bottom-left: AI Detective chat */}
-        <div className="min-w-0 min-h-0 overflow-hidden border-r border-detective-600/30 bg-detective-900 p-2">
+        <div
+          className="min-w-0 min-h-0 overflow-hidden border-r border-detective-600/30 bg-detective-900 p-2"
+          style={{ gridRow: "1 / span 2" }}
+        >
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
               AI Detective
