@@ -63,7 +63,7 @@ export async function runAnalysis() {
  * @returns {Promise<object[]>}
  */
 export async function fetchCameraOutput() {
-  const localUrl = getApiUrl("/api/camera-output");
+  const localUrl = getApiUrl("/camera-output");
   const candidates = [localUrl];
 
   if (CAMERA_OUTPUT_FALLBACK_URL && CAMERA_OUTPUT_FALLBACK_URL !== localUrl) {
