@@ -20,6 +20,8 @@ export default function FootageReview({
 }) {
   const [zoom, setZoom] = useState(1);
   const [frameIndex, setFrameIndex] = useState(-1); // -1 = latest
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackFps, setPlaybackFps] = useState(10);
   const containerRef = useRef(null);
 
   // Resolve which frame to show
@@ -32,10 +34,32 @@ export default function FootageReview({
 
   // Auto-follow latest when at the end
   useEffect(() => {
+    if (isPlaying) return;
     if (frameIndex < 0 || frameIndex >= totalFrames - 1) {
       setFrameIndex(-1);
     }
-  }, [totalFrames]);
+  }, [totalFrames, frameIndex, isPlaying]);
+
+  useEffect(() => {
+    if (!isPlaying || totalFrames <= 1) return;
+
+    const intervalMs = Math.max(50, Math.floor(1000 / playbackFps));
+    const timer = setInterval(() => {
+      setFrameIndex((prev) => {
+        const current = prev < 0 ? 0 : prev;
+        if (current >= totalFrames - 1) return 0;
+        return current + 1;
+      });
+    }, intervalMs);
+
+    return () => clearInterval(timer);
+  }, [isPlaying, playbackFps, totalFrames]);
+
+  useEffect(() => {
+    if (totalFrames === 0 && isPlaying) {
+      setIsPlaying(false);
+    }
+  }, [totalFrames, isPlaying]);
 
   const imgSrc = currentFrame
     ? viewMode === "depth" && currentFrame.depth_base64
@@ -50,6 +74,7 @@ export default function FootageReview({
   };
 
   const stepFrame = (delta) => {
+    setIsPlaying(false);
     setFrameIndex((prev) => {
       const current = prev < 0 ? totalFrames - 1 : prev;
       const next = current + delta;
@@ -57,6 +82,21 @@ export default function FootageReview({
       if (next >= totalFrames) return -1; // snap to latest
       return next;
     });
+  };
+
+  const togglePlayback = () => {
+    if (totalFrames === 0) return;
+    setIsPlaying((prev) => {
+      if (!prev && (frameIndex < 0 || frameIndex >= totalFrames - 1)) {
+        setFrameIndex(0);
+      }
+      return !prev;
+    });
+  };
+
+  const handleFrameScrub = (nextIndex) => {
+    setIsPlaying(false);
+    setFrameIndex(nextIndex);
   };
 
   const isLive = frameIndex < 0 || frameIndex >= totalFrames - 1;
@@ -78,6 +118,12 @@ export default function FootageReview({
             <span className="text-[9px] bg-detective-danger/15 text-detective-danger px-1.5 py-0.5 rounded border border-detective-danger/20 flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-detective-danger recording-pulse" />
               LIVE
+            </span>
+          )}
+          {isPlaying && totalFrames > 0 && (
+            <span className="text-[9px] bg-detective-success/15 text-detective-success px-1.5 py-0.5 rounded border border-detective-success/20 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-detective-success recording-pulse" />
+              PLAYING
             </span>
           )}
         </div>
@@ -188,6 +234,15 @@ export default function FootageReview({
         <div className="flex items-center gap-1.5">
           <button
             type="button"
+            onClick={togglePlayback}
+            disabled={totalFrames === 0}
+            className="h-6 px-2 rounded border border-detective-accent/30 bg-detective-accent/15 text-[10px] font-medium text-detective-accent transition-colors hover:bg-detective-accent/25 disabled:opacity-40 disabled:cursor-not-allowed"
+            title={isPlaying ? "Pause playback" : "Play frames as video"}
+          >
+            {isPlaying ? "Pause" : "Play"}
+          </button>
+          <button
+            type="button"
             onClick={() => stepFrame(-10)}
             disabled={totalFrames === 0}
             className="h-6 px-1.5 rounded border border-detective-600/20 text-[10px] text-gray-400 transition-colors hover:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
@@ -228,7 +283,10 @@ export default function FootageReview({
           </button>
           <button
             type="button"
-            onClick={() => setFrameIndex(-1)}
+            onClick={() => {
+              setIsPlaying(false);
+              setFrameIndex(-1);
+            }}
             disabled={totalFrames === 0 || isLive}
             className="h-6 px-2 rounded border border-detective-accent/30 bg-detective-accent/15 text-[10px] font-medium text-detective-accent transition-colors hover:bg-detective-accent/25 disabled:opacity-40 disabled:cursor-not-allowed"
           >
@@ -272,6 +330,38 @@ export default function FootageReview({
           >
             +
           </button>
+        </div>
+      </div>
+
+      {/* Frame scrubber (exact frame-to-UI mapping) */}
+      <div className="px-3 py-2 bg-detective-800/35 border-t border-detective-600/15 shrink-0">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-gray-500">Frame</span>
+          <input
+            type="range"
+            min="0"
+            max={Math.max(0, totalFrames - 1)}
+            step="1"
+            value={Math.max(0, displayIndex)}
+            onChange={(e) => handleFrameScrub(Number(e.target.value))}
+            disabled={totalFrames === 0}
+            className="flex-1 accent-detective-accent"
+          />
+          <span className="text-[10px] font-mono text-gray-400 w-20 text-right">
+            {totalFrames > 0 ? `${displayIndex + 1}/${totalFrames}` : "0/0"}
+          </span>
+          <input
+            type="range"
+            min="2"
+            max="24"
+            step="1"
+            value={playbackFps}
+            onChange={(e) => setPlaybackFps(Number(e.target.value))}
+            disabled={totalFrames === 0}
+            className="w-20 accent-detective-success"
+            title="Playback FPS"
+          />
+          <span className="text-[10px] text-gray-500 w-10">{playbackFps} fps</span>
         </div>
       </div>
     </div>

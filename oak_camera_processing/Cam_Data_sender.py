@@ -112,7 +112,7 @@ with dai.Pipeline() as p:
     sdn = p.create(dai.node.SpatialDetectionNetwork).build(camRgb, depthSource, model)
 
     # Output Node
-    api_node = p.create(ApiSyncNode, api_url="https://ai-detective-k-9gvw.onrender.com/api/camera-output")
+    api_node = p.create(ApiSyncNode, api_url="http://localhost:5001/api/camera-output")
     api_node.build(
         sdn.out, 
         sdn.passthrough,   # The RGB frame synced with the NN
