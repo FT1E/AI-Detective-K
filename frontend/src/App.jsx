@@ -101,7 +101,7 @@ function Dashboard() {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
 
-  const handleVisionSync = async () => {
+  const handleVisionSync = useCallback(async () => {
     if (syncing) return;
     setSyncing(true);
     try {
@@ -116,7 +116,7 @@ function Dashboard() {
     } finally {
       setSyncing(false);
     }
-  };
+  }, [syncing]);
 
   const handleReportUpdate = (updatedReport) => {
     setReport(updatedReport);
@@ -160,13 +160,7 @@ function Dashboard() {
     };
   }, [cameraSummary, events, cameraFrames]);
 
-  const phase = report
-    ? "report"
-    : syncing
-      ? "analyzing"
-      : cameraFrames.length > 0
-        ? "reviewing"
-        : "idle";
+  const phase = "idle"
 
   const [topRightView, setTopRightView] = useState("report");
 

@@ -21,27 +21,38 @@ export default function FootageReview({
   const [zoom, setZoom] = useState(1);
   const [frameIndex, setFrameIndex] = useState(-1); // -1 = latest
   const [isPlaying, setIsPlaying] = useState(true);
+  const [playbackFps, setPlaybackFps] = useState(10);
   const [currentFrame, setCurrentFrame] = useState(null);
   const containerRef = useRef(null);
   const framesRef = useRef(frames);
   const fetchingRef = useRef(false);
   const tickIdRef = useRef(null);
+  const onVisionSyncRef = useRef(onVisionSync);
 
   // Keep framesRef in sync with the prop
   useEffect(() => {
     framesRef.current = frames;
   }, [frames]);
 
-  // Streaming loop: pop frames at 30fps (33ms interval)
+  // Keep onVisionSyncRef in sync with the prop
   useEffect(() => {
+    onVisionSyncRef.current = onVisionSync;
+  }, [onVisionSync]);
+
+  // Streaming loop: pop frames at 30fps, fetch more when empty
+  useEffect(() => {
+    if (!isPlaying) return;
+
     const tick = async () => {
+      if (!isPlaying) return;
+
       if (framesRef.current.length > 0) {
         const next = framesRef.current.shift();
         setCurrentFrame(next);
       } else if (backendConnected && !fetchingRef.current) {
         fetchingRef.current = true;
         try {
-          const newFrames = await onVisionSync();
+          const newFrames = await onVisionSyncRef.current();
           if (newFrames?.length) framesRef.current.push(...newFrames);
         } catch (e) {
           console.error("Vision sync failed", e);
@@ -50,19 +61,14 @@ export default function FootageReview({
         }
       }
 
-      if (isPlaying) {
-        tickIdRef.current = setTimeout(tick, 1000 / 30);
-      }
+      if (isPlaying) setTimeout(tick, 1000 / 30);
     };
 
-    if (isPlaying) {
-      tickIdRef.current = setTimeout(tick, 1000 / 30);
-    }
-
+    const id = setTimeout(tick, 1000 / 30);
     return () => {
-      if (tickIdRef.current) clearTimeout(tickIdRef.current);
+      clearTimeout(id);
     };
-  }, [isPlaying, backendConnected, onVisionSync]);
+  }, [isPlaying, backendConnected]);
 
   const totalFrames = frames.length;
   const displayIndex =
@@ -373,7 +379,18 @@ export default function FootageReview({
           <span className="text-[10px] font-mono text-gray-400 w-20 text-right">
             {totalFrames > 0 ? `${displayIndex + 1}/${totalFrames}` : "0/0"}
           </span>
-          <span className="text-[10px] text-gray-500">30 fps</span>
+          <input
+            type="range"
+            min="2"
+            max="24"
+            step="1"
+            value={playbackFps}
+            onChange={(e) => setPlaybackFps(Number(e.target.value))}
+            disabled={totalFrames === 0}
+            className="w-20 accent-detective-success"
+            title="Playback FPS"
+          />
+          <span className="text-[10px] text-gray-500 w-10">{playbackFps} fps</span>
         </div>
       </div>
     </div>
