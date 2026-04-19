@@ -123,25 +123,41 @@ function Dashboard() {
   };
 
   const handleGenerateReport = () => {
-    if (!cameraSummary) return;
-    const classList =
-      cameraSummary.classes?.map((c) => c.name).join(", ") || "no objects";
-    const closestLine = cameraSummary.closest
-      ? ` Closest object was ${cameraSummary.closest.name} at ${cameraSummary.closest.distance.toFixed(2)} m.`
-      : "";
-    setReport({
-      case_id: `CASE-${Date.now().toString(36).toUpperCase()}`,
-      observation_window: { event_count: events.length },
-      threat_assessment: { level: "moderate", label: "Routine observation" },
-      narrative:
-        `Captured ${cameraSummary.totalFrames} frames across ${cameraSummary.classes.length} object type(s): ${classList}.${closestLine}`.trim(),
-      key_findings: events.slice(0, 5).map((ev) => ({
-        finding: ev.summary,
-        significance: "",
-      })),
-      recommendation:
-        "Review the event timeline and annotate findings manually.",
-    });
+    const handleGenerateReport = () => {
+      // 1. Validation
+      if (!cameraSummary || cameraFrames.length === 0) return;
+
+      // 2. Capture a static snapshot of the current live data
+      // We use structuredClone or spread to ensure we aren't pointing to live references
+      const snapshotSummary = JSON.parse(JSON.stringify(cameraSummary));
+      const snapshotEvents = JSON.parse(JSON.stringify(events));
+
+      const classList =
+        snapshotSummary.classes?.map((c) => c.name).join(", ") || "no objects";
+
+      const closestLine = snapshotSummary.closest
+        ? ` Closest object was ${snapshotSummary.closest.name} at ${snapshotSummary.closest.distance.toFixed(2)} m.`
+        : "";
+
+      // 3. Set the report with its own internal copy of the data
+      setReport({
+        case_id: `CASE-${Date.now().toString(36).toUpperCase()}`,
+        observation_window: { event_count: snapshotEvents.length },
+        threat_assessment: { level: "moderate", label: "Routine observation" },
+        // Use the snapshot values for the narrative
+        narrative:
+          `Captured ${snapshotSummary.totalFrames} frames across ${snapshotSummary.classes.length} object type(s): ${classList}.${closestLine}`.trim(),
+        key_findings: snapshotEvents.slice(0, 5).map((ev) => ({
+          finding: ev.summary,
+          significance: "",
+        })),
+        recommendation:
+          "Review the event timeline and annotate findings manually.",
+
+        capturedSummary: snapshotSummary,
+        capturedEvents: snapshotEvents,
+      });
+    };
   };
 
   const cameraSummary = useMemo(

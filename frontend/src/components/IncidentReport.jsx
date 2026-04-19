@@ -292,12 +292,15 @@ export default function IncidentReport({
   if (!report) {
     return (
       <IdleState
-        cameraSummary={cameraSummary} // Live data
-        events={events} // Live data
+        cameraSummary={cameraSummary}
+        events={events}
         onGenerate={onGenerate}
       />
     );
   }
+
+  const displaySummary = report.capturedSummary;
+  const displayEvents = report.capturedEvents;
 
   // Show report view
   const threat =
@@ -344,8 +347,10 @@ export default function IncidentReport({
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {cameraSummary && <CameraSummarySection summary={cameraSummary} />}
-        {events && events.length > 0 && <EventsTimeline events={events} />}
+        {displaySummary && <CameraSummarySection summary={displaySummary} />}
+        {displayEvents && displayEvents.length > 0 && (
+          <EventsTimeline events={displayEvents} />
+        )}
 
         {report.threat_assessment && (
           <div
