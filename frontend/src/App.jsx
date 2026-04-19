@@ -101,7 +101,7 @@ function Dashboard() {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
 
-  const handleVisionSync = async () => {
+  const handleVisionSync = useCallback(async () => {
     if (syncing) return;
     setSyncing(true);
     try {
@@ -116,7 +116,7 @@ function Dashboard() {
     } finally {
       setSyncing(false);
     }
-  };
+  }, [syncing]);
 
   const handleReportUpdate = (updatedReport) => {
     setReport(updatedReport);

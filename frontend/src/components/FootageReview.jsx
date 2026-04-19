@@ -26,11 +26,17 @@ export default function FootageReview({
   const framesRef = useRef(frames);
   const fetchingRef = useRef(false);
   const tickIdRef = useRef(null);
+  const onVisionSyncRef = useRef(onVisionSync);
 
   // Keep framesRef in sync with the prop
   useEffect(() => {
     framesRef.current = frames;
   }, [frames]);
+
+  // Keep onVisionSyncRef in sync with the prop
+  useEffect(() => {
+    onVisionSyncRef.current = onVisionSync;
+  }, [onVisionSync]);
 
   // Streaming loop: pop frames at 30fps (33ms interval)
   useEffect(() => {
@@ -41,7 +47,7 @@ export default function FootageReview({
       } else if (backendConnected && !fetchingRef.current) {
         fetchingRef.current = true;
         try {
-          const newFrames = await onVisionSync();
+          const newFrames = await onVisionSyncRef.current();
           if (newFrames?.length) framesRef.current.push(...newFrames);
         } catch (e) {
           console.error("Vision sync failed", e);
@@ -62,7 +68,7 @@ export default function FootageReview({
     return () => {
       if (tickIdRef.current) clearTimeout(tickIdRef.current);
     };
-  }, [isPlaying, backendConnected, onVisionSync]);
+  }, [isPlaying, backendConnected]);
 
   const totalFrames = frames.length;
   const displayIndex =
