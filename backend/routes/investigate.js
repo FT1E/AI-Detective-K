@@ -43,6 +43,16 @@ function buildContextText(cameraContext) {
         `- Closest approach: ${summary.closest.name} at ${summary.closest.distance.toFixed(2)}m (frame ${summary.closest.frameIndex + 1})`,
       );
     }
+    if (Array.isArray(summary.pairs) && summary.pairs.length > 0) {
+      lines.push("- Inter-object distances (min across frames):");
+      for (const p of summary.pairs.slice(0, 10)) {
+        const range =
+          p.maxDist !== p.minDist
+            ? `${p.minDist.toFixed(2)}–${p.maxDist.toFixed(2)}m`
+            : `${p.minDist.toFixed(2)}m`;
+        lines.push(`  · ${p.nameA} ↔ ${p.nameB}: ${range}`);
+      }
+    }
   }
 
   if (Array.isArray(events) && events.length > 0) {
