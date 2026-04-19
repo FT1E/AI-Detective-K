@@ -69,7 +69,7 @@ export default function FootageReview({
     }
   }, [totalFrames, isPlaying]);
 
-  const imgSrc = currentFrame
+  const imgContent = currentFrame
     ? viewMode === "depth" && currentFrame.depth_base64
       ? `data:image/jpeg;base64,${currentFrame.depth_base64}`
       : currentFrame.rgb_base64
@@ -154,17 +154,16 @@ export default function FootageReview({
 
       {/* Frame display */}
       <div ref={containerRef} className="flex-1 relative bg-black overflow-hidden">
-        {imgSrc != null ? (
+        {imgContent != null ? (
           <>
             <img
-              src={imgSrc}
               alt={`${viewMode} frame`}
               className="absolute inset-0 h-full w-full object-contain"
               style={{
                 transform: `scale(${zoom})`,
                 transformOrigin: "center center",
               }}
-            />
+            >{imgContent}</img>
 
             <div
               className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${MODE_TINT[viewMode]}`}
