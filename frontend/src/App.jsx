@@ -285,11 +285,11 @@ function Dashboard() {
             {topRightView === "report" ? (
               <IncidentReport
                 report={report}
-                //phase={phase}
+                phase={phase}
                 analyzing={syncing}
                 eventCount={events.length}
                 //onReportUpdate={handleReportUpdate}
-                onGenerate={handleGenerateReport}
+                //onGenerate={handleGenerateReport}
                 cameraSummary={cameraSummary}
                 events={events}
               />
