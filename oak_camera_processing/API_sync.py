@@ -22,7 +22,8 @@ class ApiSyncNode(dai.node.HostNode):
     def __init__(self, api_url):
         dai.node.HostNode.__init__(self)
         self.api_url = api_url
-        self.last_600_frames = []
+        self.last_60_frames = []
+        self.last_time_stamp = dt.datetime.now().timestamp()
         self.sendProcessingToPipeline(True)
 
     def build(self, detections: dai.Node.Output, rgb: dai.Node.Output, depth: dai.Node.Output):
@@ -56,17 +57,25 @@ class ApiSyncNode(dai.node.HostNode):
             "detections": results,
             "rgb_base64": base64.b64encode(rgb_encoded).decode('utf-8'),
             "depth_base64": base64.b64encode(depth_encoded).decode('utf-8'),
-            "timestamp" : dt.datetime.timestamp
+            "timestamp" : dt.datetime.now().timestamp()
         }
 
         # Send to backend
         try:
             # Note: Network requests are slow; consider a lower FPS or a separate thread for production
-            # requests.post(self.api_url, json=payload, timeout=0.5)
+            # print(payload)
 
-            self.last_600_frames.append(payload)
-            while(len(self.last_600_frames) > 600):
-                self.last_600_frames.pop()
+            # print(f"Last tiemstamp: {self.last_time_stamp} == now timestamp {dt.datetime.now().timestamp()}")
+            # print(f"Condition value {int(dt.datetime.now().timestamp() - self.last_time_stamp) > 2}")
+            if( int(dt.datetime.now().timestamp() - self.last_time_stamp) > 2):
+                # print(self.last_60_frames)
+                # print(f"Sending data at {dt.datetime.now().timestamp()}")
+                requests.post(self.api_url, json=self.last_60_frames, timeout=0.5)
+                self.last_time_stamp = dt.datetime.now().timestamp()
+
+            self.last_60_frames.append(payload)
+            while(len(self.last_60_frames) > 60):
+                self.last_60_frames.pop()
 
         except Exception as e:
             print(f"Sync API Error: {e}")
@@ -91,7 +100,7 @@ with dai.Pipeline() as p:
     sdn = p.create(dai.node.SpatialDetectionNetwork).build(camRgb, depthSource, model)
 
     # Output Node
-    api_node = p.create(ApiSyncNode, api_url="https://backend-3su7.onrender.com/api/camera-data")
+    api_node = p.create(ApiSyncNode, api_url="https://ai-detective-k-9gvw.onrender.com/api/camera-output")
     api_node.build(
         sdn.out, 
         sdn.passthrough,   # The RGB frame synced with the NN
