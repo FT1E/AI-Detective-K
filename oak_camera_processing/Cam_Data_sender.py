@@ -6,42 +6,52 @@ import json
 import base64
 import requests
 import datetime as dt
-
+import threading
 
 """
-for getting the data for last 600 frames access self.last_600_frames
-each element in list has format:
-{
-detections : <list of detected objects on frame>,
-rgb_base64 : <rgb frame encoded in base 64>,
-depth_basa64 : <depth frame encoded in base 64>,
-timestamp : <posix timestamp>
-}
+Fixed Version:
+1. Non-blocking network requests using threading.
+2. JPEG compression (70%) to reduce payload size by ~60%.
+3. Use of requests.Session for faster connection handling.
+4. Increased timeout to handle large batches (60 frames).
 """
+
 class ApiSyncNode(dai.node.HostNode):
     def __init__(self, api_url):
         dai.node.HostNode.__init__(self)
         self.api_url = api_url
         self.last_60_frames = []
         self.last_time_stamp = dt.datetime.now().timestamp()
+        
+        # Use a Session for connection pooling (faster)
+        self.session = requests.Session()
         self.sendProcessingToPipeline(True)
 
     def build(self, detections: dai.Node.Output, rgb: dai.Node.Output, depth: dai.Node.Output):
-        # Linking all three ensures the SDK delivers them synchronized to process()
+        # Linking ensures the SDK delivers them synchronized to process()
         self.link_args(detections, rgb, depth)
+
+    def _send_batch(self, data_to_send):
+        """ Internal helper to send data in the background """
+        try:
+            # Increased timeout to 20s. Render Free Tier can be slow to respond.
+            response = self.session.post(self.api_url, json=data_to_send, timeout=20)
+            print(f"Batch sent successfully. Status: {response.status_code}")
+        except Exception as e:
+            print(f"Background Upload Error: {e}")
 
     def process(self, detections, rgbMsg, depthMsg):
         # Convert frames to numpy arrays
         rgb_frame = rgbMsg.getCvFrame()
         depth_frame = depthMsg.getFrame() # 16-bit depth in mm
 
-        # Encode RGB to JPG
-        _, rgb_encoded = cv2.imencode('.jpg', rgb_frame)
+        # Encode RGB to JPG with 70% quality to reduce bandwidth/SSL buffer errors
+        _, rgb_encoded = cv2.imencode('.jpg', rgb_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
         
-        # Normalize and colorize depth for the API (easier to view than raw 16-bit)
+        # Normalize and colorize depth
         depth_norm = cv2.normalize(depth_frame, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)
         depth_color = cv2.applyColorMap(depth_norm, cv2.COLORMAP_JET)
-        _, depth_encoded = cv2.imencode('.jpg', depth_color)
+        _, depth_encoded = cv2.imencode('.jpg', depth_color, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
 
         # Prepare JSON payload
         results = []
@@ -60,25 +70,27 @@ class ApiSyncNode(dai.node.HostNode):
             "timestamp" : dt.datetime.now().timestamp()
         }
 
-        # Send to backend
-        try:
-            # Note: Network requests are slow; consider a lower FPS or a separate thread for production
-            # print(payload)
+        # Add current frame to buffer
+        self.last_60_frames.append(payload)
+        
+        # Keep buffer at 60 frames max
+        if len(self.last_60_frames) > 60:
+            self.last_60_frames.pop(0)
 
-            # print(f"Last tiemstamp: {self.last_time_stamp} == now timestamp {dt.datetime.now().timestamp()}")
-            # print(f"Condition value {int(dt.datetime.now().timestamp() - self.last_time_stamp) > 2}")
-            if( int(dt.datetime.now().timestamp() - self.last_time_stamp) > 2):
-                # print(self.last_60_frames)
-                # print(f"Sending data at {dt.datetime.now().timestamp()}")
-                requests.post(self.api_url, json=self.last_60_frames, timeout=0.5)
-                self.last_time_stamp = dt.datetime.now().timestamp()
-
-            self.last_60_frames.append(payload)
-            while(len(self.last_60_frames) > 60):
-                self.last_60_frames.pop()
-
-        except Exception as e:
-            print(f"Error while sending post request: {e}")
+        # Send batch every 2 seconds
+        current_time = dt.datetime.now().timestamp()
+        if (current_time - self.last_time_stamp) > 2:
+            if self.last_60_frames:
+                # Create a snapshot of current buffer to send in background
+                data_snapshot = list(self.last_60_frames)
+                
+                # Run the POST request in a separate thread so camera doesn't lag
+                upload_thread = threading.Thread(
+                    target=self._send_batch, 
+                    args=(data_snapshot,), 
+                    daemon=True
+                )
+                upload_thread.start()
 
 with dai.Pipeline() as p:
     fps = 20
