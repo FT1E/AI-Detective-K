@@ -114,17 +114,28 @@ function Dashboard() {
   }, []);
 
   const [syncing, setSyncing] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const syncingRef = useRef(false);
+  const lastFrameCountRef = useRef(0);
+  const lastReceivedAtRef = useRef("");
 
-  const handleVisionSync = async () => {
-    if (syncing) return;
+  const handleVisionSync = useCallback(async () => {
+    if (syncingRef.current) return;
+    syncingRef.current = true;
     setSyncing(true);
     try {
       const data = await fetchCameraOutput();
-      // const allFrames = data.flat();
-      setCameraFrames(data);
+      const frames = Array.isArray(data) ? data : [];
+      const lastReceivedAt = frames.length > 0 ? (frames[frames.length - 1].received_at ?? "") : "";
+      if (frames.length !== lastFrameCountRef.current || lastReceivedAt !== lastReceivedAtRef.current) {
+        lastFrameCountRef.current = frames.length;
+        lastReceivedAtRef.current = lastReceivedAt;
+        setCameraFrames(frames);
+      }
       setBackendConnected(true);
 
       // Run analysis with the fetched data
+      setAnalyzing(true);
       const analysis = await runAnalysis();
       setEvents(analysis.events || []);
       setReport(analysis.report || null);
@@ -132,9 +143,11 @@ function Dashboard() {
     } catch (err) {
       console.error("Vision sync error:", err);
     } finally {
+      syncingRef.current = false;
       setSyncing(false);
+      setAnalyzing(false);
     }
-  };
+  }, []);
 
   const handleReportUpdate = (updatedReport) => {
     setReport(updatedReport);
@@ -142,7 +155,7 @@ function Dashboard() {
 
   const phase = report
     ? "report"
-    : syncing
+    : analyzing
       ? "analyzing"
       : cameraFrames.length > 0
         ? "reviewing"
@@ -279,7 +292,7 @@ function Dashboard() {
               <IncidentReport
                 report={report}
                 phase={phase}
-                analyzing={syncing}
+                analyzing={analyzing}
                 eventCount={events.length}
                 onReportUpdate={handleReportUpdate}
               />
