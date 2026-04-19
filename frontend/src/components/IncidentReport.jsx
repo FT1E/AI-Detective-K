@@ -97,7 +97,7 @@ function formatDuration(seconds) {
 }
 
 function CameraSummarySection({ summary }) {
-  const { totalFrames, duration, classes, closest } = summary;
+  const { totalFrames, duration, classes, closest, pairs } = summary;
   const durationLabel = formatDuration(duration);
 
   return (
@@ -137,6 +137,30 @@ function CameraSummarySection({ summary }) {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {pairs && pairs.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-detective-600/15">
+            <div className="text-[9px] uppercase tracking-widest text-gray-500 font-semibold mb-1.5">
+              Inter-object proximity
+            </div>
+            <ul className="space-y-1">
+              {pairs.slice(0, 6).map((p) => (
+                <li
+                  key={`${p.a}|${p.b}`}
+                  className="flex items-center gap-2 text-[11px] text-gray-400"
+                >
+                  <span className="capitalize text-gray-200">{p.nameA}</span>
+                  <span className="text-gray-600">↔</span>
+                  <span className="capitalize text-gray-200">{p.nameB}</span>
+                  <span className="ml-auto font-mono text-detective-accent">
+                    {formatDistance(p.minDist)}
+                    {p.maxDist !== p.minDist ? `–${formatDistance(p.maxDist)}` : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
       </div>

@@ -29,10 +29,21 @@ function distanceMeters(spatial) {
   return Math.sqrt(x * x + z * z) / 1000;
 }
 
+// Straight-line distance between two spatial points (meters).
+function pairDistanceMeters(a, b) {
+  if (!a || !b) return null;
+  const ax = Number(a.x) || 0, az = Number(a.z) || 0;
+  const bx = Number(b.x) || 0, bz = Number(b.z) || 0;
+  if ((ax === 0 && az === 0) || (bx === 0 && bz === 0)) return null;
+  const dx = ax - bx, dz = az - bz;
+  return Math.sqrt(dx * dx + dz * dz) / 1000;
+}
+
 export function summarizeFrames(frames) {
   if (!Array.isArray(frames) || frames.length === 0) return null;
 
   const classes = new Map(); // label id -> aggregate
+  const pairs = new Map(); // "labelA|labelB" (sorted) -> { a, b, nameA, nameB, minDist, maxDist, frameIndex }
   let closest = null; // { label, name, distance, conf, frameIndex }
   let firstTs = null;
   let lastTs = null;
@@ -83,6 +94,34 @@ export function summarizeFrames(frames) {
         closest = { label: id, name, distance: dist, conf, frameIndex };
       }
     }
+
+    // Pairwise distances between different-class detections in this frame.
+    for (let i = 0; i < dets.length; i++) {
+      const a = dets[i];
+      if (a?.label == null || !a.spatial) continue;
+      for (let j = i + 1; j < dets.length; j++) {
+        const b = dets[j];
+        if (b?.label == null || !b.spatial) continue;
+        if (a.label === b.label) continue;
+        const d = pairDistanceMeters(a.spatial, b.spatial);
+        if (d == null) continue;
+        const [loA, loB] = a.label < b.label ? [a.label, b.label] : [b.label, a.label];
+        const key = `${loA}|${loB}`;
+        let p = pairs.get(key);
+        if (!p) {
+          p = {
+            a: loA, b: loB,
+            nameA: labelName(loA), nameB: labelName(loB),
+            minDist: d, maxDist: d,
+            frameIndex,
+          };
+          pairs.set(key, p);
+        } else {
+          if (d < p.minDist) { p.minDist = d; p.frameIndex = frameIndex; }
+          if (d > p.maxDist) p.maxDist = d;
+        }
+      }
+    }
   });
 
   const classList = [...classes.values()].sort(
@@ -92,6 +131,8 @@ export function summarizeFrames(frames) {
   const duration =
     firstTs != null && lastTs != null ? Math.max(0, lastTs - firstTs) : null;
 
+  const pairList = [...pairs.values()].sort((a, b) => a.minDist - b.minDist);
+
   return {
     totalFrames: frames.length,
     duration,
@@ -99,5 +140,6 @@ export function summarizeFrames(frames) {
     lastTs,
     classes: classList,
     closest,
+    pairs: pairList,
   };
 }
