@@ -109,6 +109,7 @@ function Dashboard() {
       const frames = Array.isArray(data) ? data : [];
       setCameraFrames(frames);
       setBackendConnected(true);
+      return frames;
     } catch (err) {
       console.error("Vision sync error:", err);
       setBackendConnected(false);
