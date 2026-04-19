@@ -41,7 +41,11 @@ export default function FootageReview({
 
   // Streaming loop: pop frames at 30fps, fetch more when empty
   useEffect(() => {
+    if (!isPlaying) return;
+
     const tick = async () => {
+      if (!isPlaying) return;
+
       if (framesRef.current.length > 0) {
         const next = framesRef.current.shift();
         setCurrentFrame(next);
@@ -57,17 +61,12 @@ export default function FootageReview({
         }
       }
 
-      if (isPlaying) {
-        tickIdRef.current = setTimeout(tick, 1000 / 30);
-      }
+      if (isPlaying) setTimeout(tick, 1000 / 30);
     };
 
-    if (isPlaying) {
-      tickIdRef.current = setTimeout(tick, 1000 / 30);
-    }
-
+    const id = setTimeout(tick, 1000 / 30);
     return () => {
-      if (tickIdRef.current) clearTimeout(tickIdRef.current);
+      clearTimeout(id);
     };
   }, [isPlaying, backendConnected]);
 
