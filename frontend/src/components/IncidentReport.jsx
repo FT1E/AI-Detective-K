@@ -58,26 +58,98 @@ function AnalyzingState({ eventCount }) {
   )
 }
 
-function IdleState() {
+function IdleState({ cameraSummary }) {
   return (
-    <div className="flex flex-col items-center justify-center h-full text-center px-8">
-      <svg className="w-12 h-12 text-detective-600 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={0.75}
-          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-      </svg>
-      <h3 className="text-sm font-semibold text-gray-300 mb-2">Investigation Report</h3>
-      <p className="text-xs text-gray-500 max-w-sm leading-relaxed">
-        This report will be filled as the AI detective analyzes the case.
-        You can also edit any field directly. Upload footage and start the
-        investigation to begin.
-      </p>
+    <div className="flex flex-col h-full">
+      {cameraSummary && (
+        <div className="p-4 border-b border-detective-600/20">
+          <CameraSummarySection summary={cameraSummary} />
+        </div>
+      )}
+      <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
+        <svg className="w-12 h-12 text-detective-600 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={0.75}
+            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        <h3 className="text-sm font-semibold text-gray-300 mb-2">Investigation Report</h3>
+        <p className="text-xs text-gray-500 max-w-sm leading-relaxed">
+          This report will be filled as the AI detective analyzes the case.
+          You can also edit any field directly. Upload footage and start the
+          investigation to begin.
+        </p>
+      </div>
     </div>
   )
 }
 
-export default function IncidentReport({ report, phase, analyzing, eventCount, onReportUpdate }) {
+function formatDistance(m) {
+  if (m == null) return "—";
+  if (m < 1) return `${(m * 100).toFixed(0)} cm`;
+  return `${m.toFixed(2)} m`;
+}
+
+function formatDuration(seconds) {
+  if (seconds == null) return null;
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  return `${m}m ${s}s`;
+}
+
+function CameraSummarySection({ summary }) {
+  const { totalFrames, duration, classes, closest } = summary;
+  const durationLabel = formatDuration(duration);
+
+  return (
+    <div>
+      <SectionHeader label="Live Sensor Detections" />
+      <div className="bg-detective-800/40 rounded-xl p-3 border border-detective-600/15">
+        <div className="flex flex-wrap items-center gap-3 text-[10px] text-gray-400 mb-3">
+          <span><span className="font-mono text-gray-200">{totalFrames}</span> frames</span>
+          {durationLabel && <span>· <span className="font-mono text-gray-200">{durationLabel}</span> span</span>}
+          <span>· <span className="font-mono text-gray-200">{classes.length}</span> object type{classes.length !== 1 ? "s" : ""}</span>
+          {closest && (
+            <span className="ml-auto text-detective-accent">
+              Closest: <span className="font-mono">{closest.name}</span> @ {formatDistance(closest.distance)}
+            </span>
+          )}
+        </div>
+        {classes.length === 0 ? (
+          <p className="text-[11px] text-gray-500 italic">No objects detected in the synced frames.</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            {classes.map((c) => (
+              <div
+                key={c.label}
+                className="rounded-lg p-2 border border-detective-600/20 bg-detective-900/40"
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-medium text-gray-200 capitalize">{c.name}</span>
+                  <span className="text-[9px] font-mono text-detective-accent bg-detective-accent/10 px-1.5 py-0.5 rounded">
+                    {Math.round(c.maxConf * 100)}%
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 text-[10px] text-gray-500 font-mono">
+                  <span>{c.frameCount}f</span>
+                  <span>{c.detectionCount}det</span>
+                  <span className="ml-auto text-gray-300">
+                    {c.minDistance != null
+                      ? `${formatDistance(c.minDistance)}${c.maxDistance != null && c.maxDistance !== c.minDistance ? `–${formatDistance(c.maxDistance)}` : ""}`
+                      : "no depth"}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function IncidentReport({ report, phase, analyzing, eventCount, onReportUpdate, cameraSummary }) {
   if (phase === 'analyzing' || analyzing) return <AnalyzingState eventCount={eventCount} />
-  if (!report) return <IdleState />
+  if (!report) return <IdleState cameraSummary={cameraSummary} />
 
   const threat = THREAT_STYLES[report.threat_assessment?.level] || THREAT_STYLES.moderate
   const totalSensorHits = Math.max(1,
@@ -112,6 +184,8 @@ export default function IncidentReport({ report, phase, analyzing, eventCount, o
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {cameraSummary && <CameraSummarySection summary={cameraSummary} />}
+
         {/* Threat Assessment */}
         {report.threat_assessment && (
           <div className={`p-3 rounded-xl border ${threat.bg} ${threat.border}`}>
