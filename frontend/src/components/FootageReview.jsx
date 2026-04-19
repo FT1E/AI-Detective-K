@@ -45,8 +45,8 @@ export default function FootageReview({
       } else if (backendConnected && !fetchingRef.current) {
         fetchingRef.current = true;
         try {
-          const newData = await onVisionSync();
-          if (newData) framesRef.current.push(newData);
+          const newFrames = await onVisionSync();
+          if (newFrames?.length) framesRef.current.push(...newFrames);
         } catch (e) {
           console.error("Vision sync failed", e);
         } finally {
@@ -54,7 +54,7 @@ export default function FootageReview({
         }
       }
 
-      setTimeout(tick, 1000 / 30);
+      if (!cancelled) setTimeout(tick, 1000 / 30);  // <-- moved to end, not inside async
     };
 
     const id = setTimeout(tick, 1000 / 30);
