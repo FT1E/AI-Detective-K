@@ -87,7 +87,7 @@ function IdleState({ cameraSummary, events, onGenerate }) {
   const hasData = cameraSummary || (events && events.length > 0);
   return (
     <div className="flex flex-col h-full min-h-0 overflow-y-auto">
-      {hasData && onGenerate && (
+      {hasData && (
         <div className="p-4 border-b border-detective-600/20">
           <button
             onClick={onGenerate}
