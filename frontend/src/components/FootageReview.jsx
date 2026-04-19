@@ -27,9 +27,7 @@ export default function FootageReview({
   // Resolve which frame to show
   const totalFrames = frames.length;
   let displayIndex =
-    frameIndex < 0 || frameIndex >= totalFrames
-      ? totalFrames - 1
-      : frameIndex;
+    frameIndex < 0 || frameIndex >= totalFrames ? totalFrames - 1 : frameIndex;
   let currentFrame = totalFrames > 0 ? frames[displayIndex] : null;
 
   // useEffect(() => {
@@ -153,7 +151,10 @@ export default function FootageReview({
       </div>
 
       {/* Frame display */}
-      <div ref={containerRef} className="flex-1 relative bg-black overflow-hidden">
+      <div
+        ref={containerRef}
+        className="flex-1 relative bg-black overflow-hidden"
+      >
         {imgContent != null ? (
           <>
             <img
@@ -183,7 +184,9 @@ export default function FootageReview({
                 Frame {displayIndex + 1}/{totalFrames}
                 {currentFrame.timestamp && (
                   <span className="ml-2">
-                    {new Date(currentFrame.timestamp * 1000).toLocaleTimeString()}
+                    {new Date(
+                      currentFrame.timestamp * 1000,
+                    ).toLocaleTimeString()}
                   </span>
                 )}
               </div>
@@ -191,7 +194,8 @@ export default function FootageReview({
 
             {currentFrame?.detections?.length > 0 && (
               <div className="absolute right-2 bottom-2 rounded bg-black/60 px-2 py-1 text-[9px] text-gray-400">
-                {currentFrame.detections.length} detection{currentFrame.detections.length !== 1 ? "s" : ""}
+                {currentFrame.detections.length} detection
+                {currentFrame.detections.length !== 1 ? "s" : ""}
               </div>
             )}
           </>
@@ -216,7 +220,8 @@ export default function FootageReview({
               No Footage Loaded
             </p>
             <p className="mt-2 max-w-xs text-[11px] leading-relaxed text-gray-500">
-              Click Vision Sync Trigger to pull camera data from the backend and run analysis.
+              Click Vision Sync Trigger to pull camera data from the backend and
+              run analysis.
             </p>
             <button
               type="button"
@@ -227,7 +232,9 @@ export default function FootageReview({
               {syncing ? "Syncing..." : "Vision Sync Trigger"}
             </button>
             <div className="mt-3 flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${backendConnected ? "bg-detective-success" : "bg-detective-danger"}`} />
+              <div
+                className={`w-2 h-2 rounded-full ${backendConnected ? "bg-detective-success" : "bg-detective-danger"}`}
+              />
               <span className="text-[11px] text-gray-400">
                 {backendConnected ? "Backend online" : "Backend offline"}
               </span>
@@ -265,8 +272,18 @@ export default function FootageReview({
             className="h-6 w-6 rounded border border-detective-600/20 text-[10px] text-gray-400 transition-colors hover:text-gray-200 flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed"
             title="Previous frame"
           >
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            <svg
+              className="w-3 h-3"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 19l-7-7 7-7"
+              />
             </svg>
           </button>
           <button
@@ -276,8 +293,18 @@ export default function FootageReview({
             className="h-6 w-6 rounded border border-detective-600/20 text-[10px] text-gray-400 transition-colors hover:text-gray-200 flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed"
             title="Next frame"
           >
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            <svg
+              className="w-3 h-3"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5l7 7-7 7"
+              />
             </svg>
           </button>
           <button
@@ -369,7 +396,9 @@ export default function FootageReview({
             className="w-20 accent-detective-success"
             title="Playback FPS"
           />
-          <span className="text-[10px] text-gray-500 w-10">{playbackFps} fps</span>
+          <span className="text-[10px] text-gray-500 w-10">
+            {playbackFps} fps
+          </span>
         </div>
       </div>
     </div>

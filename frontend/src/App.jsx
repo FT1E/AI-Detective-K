@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import FootageReview from "./components/FootageReview";
 import IncidentReport from "./components/IncidentReport";
 import SceneCanvas3D from "./components/SceneCanvas3D";
 import DetectiveChat from "./components/DetectiveChat";
 import { fetchCaseData, runAnalysis, fetchCameraOutput } from "./lib/api";
+import { summarizeFrames } from "./lib/cameraSummary";
 
 /* ── Resize hook ── */
 function useResize(initial, axis) {
@@ -139,6 +140,11 @@ function Dashboard() {
   const handleReportUpdate = (updatedReport) => {
     setReport(updatedReport);
   };
+
+  const cameraSummary = useMemo(
+    () => summarizeFrames(cameraFrames),
+    [cameraFrames],
+  );
 
   const phase = report
     ? "report"
@@ -282,6 +288,7 @@ function Dashboard() {
                 analyzing={syncing}
                 eventCount={events.length}
                 onReportUpdate={handleReportUpdate}
+                cameraSummary={cameraSummary}
               />
             ) : (
               <SceneCanvas3D />
