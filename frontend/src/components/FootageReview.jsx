@@ -20,7 +20,7 @@ export default function FootageReview({
 }) {
   const [zoom, setZoom] = useState(1);
   const [frameIndex, setFrameIndex] = useState(-1); // -1 = latest
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(true);
   const [playbackFps, setPlaybackFps] = useState(10);
   const [currentFrame, setCurrentFrame] = useState(null);
   const containerRef = useRef(null);
@@ -34,10 +34,10 @@ export default function FootageReview({
 
   // Streaming loop: pop frames at 30fps, fetch more when empty
   useEffect(() => {
-    let cancelled = false;
+    if(!isPlaying) return;
 
     const tick = async () => {
-      if (cancelled) return;
+      if(!isPlaying) return;
 
       if (framesRef.current.length > 0) {
         const next = framesRef.current.shift();
@@ -54,12 +54,12 @@ export default function FootageReview({
         }
       }
 
-      if (!cancelled) setTimeout(tick, 1000 / 30);  // <-- moved to end, not inside async
+      if (isPlaying) setTimeout(tick, 1000 / 30);  // <-- moved to end, not inside async
     };
 
     const id = setTimeout(tick, 1000 / 30);
     return () => {
-      cancelled = true;
+      isPlaying = false;
       clearTimeout(id);
     };
   }, [backendConnected, onVisionSync]);
