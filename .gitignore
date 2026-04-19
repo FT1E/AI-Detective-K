@@ -38,3 +38,4 @@ env/
 *.pt
 *.onnx
 oak_camera_processing/.depthai_cached_models
+.depthai_cached_models/

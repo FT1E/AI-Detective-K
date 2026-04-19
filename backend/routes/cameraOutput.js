@@ -4,12 +4,14 @@ const router = Router();
 
 let store = [];
 
+
+const MAX_FRAMES = 30
+
 router.post("/camera-output", (req, res) => {
   const entry = { ...req.body, received_at: new Date().toISOString() };
   store.push(entry);
-  if (store.length > 60){
-    start_index = store.length-60;
-    store = store.slice( start_index > 0 ? start_index : 0)    
+  if (store.length > MAX_FRAMES){
+    store = store.slice(-MAX_FRAMES)    
   }
 
   res.json({

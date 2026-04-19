@@ -8,19 +8,13 @@ import requests
 import datetime as dt
 import threading
 
-"""
-Fixed Version:
-1. Non-blocking network requests using threading.
-2. JPEG compression (70%) to reduce payload size by ~60%.
-3. Use of requests.Session for faster connection handling.
-4. Increased timeout to handle large batches (60 frames).
-"""
+MAX_FRAMES = 30 
 
 class ApiSyncNode(dai.node.HostNode):
     def __init__(self, api_url):
         dai.node.HostNode.__init__(self)
         self.api_url = api_url
-        self.last_60_frames = []
+        self.last_x_frames = []
         self.last_time_stamp = dt.datetime.now().timestamp()
         
         # Use a Session for connection pooling (faster)
@@ -71,18 +65,18 @@ class ApiSyncNode(dai.node.HostNode):
         }
 
         # Add current frame to buffer
-        self.last_60_frames.append(payload)
+        self.last_x_frames.append(payload)
         
-        # Keep buffer at 60 frames max
-        if len(self.last_60_frames) > 60:
-            self.last_60_frames.pop(0)
+        # Keep buffer at most MAX_FRAMES frames at most
+        if len(self.last_x_frames) > MAX_FRAMES:
+            self.last_x_frames[-MAX_FRAMES:]
 
         # Send batch every 2 seconds
         current_time = dt.datetime.now().timestamp()
         if (current_time - self.last_time_stamp) > 2:
-            if self.last_60_frames:
+            if self.last_x_frames:
                 # Create a snapshot of current buffer to send in background
-                data_snapshot = list(self.last_60_frames)
+                data_snapshot = list(self.last_x_frames)
                 
                 # Run the POST request in a separate thread so camera doesn't lag
                 upload_thread = threading.Thread(
