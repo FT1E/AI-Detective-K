@@ -30,7 +30,15 @@ export default function FootageReview({
     frameIndex < 0 || frameIndex >= totalFrames
       ? totalFrames - 1
       : frameIndex;
-  const currentFrame = totalFrames > 0 ? frames[displayIndex] : null;
+  let currentFrame = totalFrames > 0 ? frames[displayIndex] : null;
+
+  useEffect(() => {
+    setTimeout(() => {
+      if(displayIndex == totalFrames) return;
+      displayIndex++;
+      currentFrame = frames[displayIndex]
+    })
+  }, [currentFrame])
 
   // Auto-follow latest when at the end
   useEffect(() => {
@@ -146,7 +154,7 @@ export default function FootageReview({
 
       {/* Frame display */}
       <div ref={containerRef} className="flex-1 relative bg-black overflow-hidden">
-        {currentFrame != null ? (
+        {imgSrc != null ? (
           <>
             <img
               src={imgSrc}
