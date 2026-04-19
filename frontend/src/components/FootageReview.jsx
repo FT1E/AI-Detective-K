@@ -22,33 +22,53 @@ export default function FootageReview({
   const [frameIndex, setFrameIndex] = useState(-1); // -1 = latest
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackFps, setPlaybackFps] = useState(10);
+  const [currentFrame, setCurrentFrame] = useState(null);
   const containerRef = useRef(null);
+  const framesRef = useRef(frames);
+  const fetchingRef = useRef(false);
 
-  // Resolve which frame to show
-  let totalFrames = frames.length;
-  let displayIndex =
+  // Keep framesRef in sync with the prop
+  useEffect(() => {
+    framesRef.current = frames;
+  }, [frames]);
+
+  // Streaming loop: pop frames at 30fps, fetch more when empty
+  useEffect(() => {
+    let cancelled = false;
+
+    const tick = async () => {
+      if (cancelled) return;
+
+      if (framesRef.current.length > 0) {
+        const next = framesRef.current.shift();
+        setCurrentFrame(next);
+      } else if (backendConnected && !fetchingRef.current) {
+        fetchingRef.current = true;
+        try {
+          const newData = await onVisionSync();
+          if (newData) framesRef.current.push(newData);
+        } catch (e) {
+          console.error("Vision sync failed", e);
+        } finally {
+          fetchingRef.current = false;
+        }
+      }
+
+      setTimeout(tick, 1000 / 30);
+    };
+
+    const id = setTimeout(tick, 1000 / 30);
+    return () => {
+      cancelled = true;
+      clearTimeout(id);
+    };
+  }, [backendConnected, onVisionSync]);
+
+  const totalFrames = frames.length;
+  const displayIndex =
     frameIndex < 0 || frameIndex >= totalFrames
       ? totalFrames - 1
       : frameIndex;
-  let currentFrame = totalFrames > 0 ? frames[displayIndex] : null;
-
-  const getData = async () => {
-    new_data = await onVisionSync();
-    frames.push(new_data)
-    if(frames.length > 0) currentFrame = frames.pop();
-  }
-
-  // for setting the next frame
-  useEffect(() => {
-    setTimeout( () => {
-      if(frames.length <= 0){
-        getData();
-        return
-      }
-      currentFrame = frames.pop();
-
-    }, 1000 / 30) // 30 times per second
-  }, [currentFrame])
 
   // Auto-follow latest when at the end
   useEffect(() => {
@@ -57,8 +77,6 @@ export default function FootageReview({
       setFrameIndex(-1);
     }
   }, [totalFrames, frameIndex, isPlaying]);
-
-  
 
   useEffect(() => {
     if (totalFrames === 0 && isPlaying) {
@@ -84,7 +102,7 @@ export default function FootageReview({
       const current = prev < 0 ? totalFrames - 1 : prev;
       const next = current + delta;
       if (next < 0) return 0;
-      if (next >= totalFrames) return -1; // snap to latest
+      if (next >= totalFrames) return -1;
       return next;
     });
   };
