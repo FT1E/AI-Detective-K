@@ -3,8 +3,9 @@ import FootageReview from "./components/FootageReview";
 import IncidentReport from "./components/IncidentReport";
 import SceneCanvas3D from "./components/SceneCanvas3D";
 import DetectiveChat from "./components/DetectiveChat";
-import { fetchCaseData, runAnalysis, fetchCameraOutput } from "./lib/api";
+import { fetchCameraOutput } from "./lib/api";
 import { summarizeFrames } from "./lib/cameraSummary";
+import { extractEvents, pickKeyFrames } from "./lib/cameraEvents";
 
 /* ── Resize hook ── */
 function useResize(initial, axis) {
@@ -51,13 +52,7 @@ function useResize(initial, axis) {
 /* ── Theme icons ── */
 function SunIcon() {
   return (
-    <svg
-      className="w-4 h-4"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2}
-    >
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -69,13 +64,7 @@ function SunIcon() {
 
 function MoonIcon() {
   return (
-    <svg
-      className="w-4 h-4"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2}
-    >
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -86,15 +75,13 @@ function MoonIcon() {
 }
 
 function Dashboard() {
-  const [events, setEvents] = useState([]);
   const [report, setReport] = useState(null);
   const [viewMode, setViewMode] = useState("rgb");
-  const [caseData, setCaseData] = useState(null);
   const [backendConnected, setBackendConnected] = useState(false);
   const [theme, setTheme] = useState("dark");
   const [cameraFrames, setCameraFrames] = useState([]);
+  const [syncing, setSyncing] = useState(false);
 
-  // Controls for split ratio — re-used to allow drag resizing of grid rows/cols
   const col = useResize(0.5, "col");
   const row = useResize(0.5, "row");
 
@@ -102,38 +89,17 @@ function Dashboard() {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
 
-  useEffect(() => {
-    fetchCaseData()
-      .then((data) => {
-        setBackendConnected(true);
-        setCaseData(data);
-      })
-      .catch((err) => {
-        setBackendConnected(false);
-        console.error("Error fetching case:", err);
-      });
-  }, []);
-
-  const [syncing, setSyncing] = useState(false);
-
   const handleVisionSync = async () => {
     if (syncing) return;
     setSyncing(true);
     try {
       const data = await fetchCameraOutput();
-      // const allFrames = data.flat();
-      setCameraFrames(data);
+      const frames = Array.isArray(data) ? data : [];
+      setCameraFrames(frames);
       setBackendConnected(true);
-
-      yield data;
-      
-      // Run analysis with the fetched data
-      const analysis = await runAnalysis();
-      setEvents(analysis.events || []);
-      setReport(analysis.report || null);
-      if (analysis.case_data) setCaseData(analysis.case_data);
     } catch (err) {
       console.error("Vision sync error:", err);
+      setBackendConnected(false);
     } finally {
       setSyncing(false);
     }
@@ -148,6 +114,20 @@ function Dashboard() {
     [cameraFrames],
   );
 
+  const events = useMemo(
+    () => extractEvents(cameraFrames),
+    [cameraFrames],
+  );
+
+  const cameraContext = useMemo(() => {
+    if (!cameraSummary) return null;
+    return {
+      summary: cameraSummary,
+      events,
+      key_frames: pickKeyFrames(cameraFrames, events, 4),
+    };
+  }, [cameraSummary, events, cameraFrames]);
+
   const phase = report
     ? "report"
     : syncing
@@ -156,14 +136,11 @@ function Dashboard() {
         ? "reviewing"
         : "idle";
 
-  // Layout toggles for right cells: "report" | "scene"
   const [topRightView, setTopRightView] = useState("report");
-  const [bottomRightView, setBottomRightView] = useState("report");
 
   const colPct = `${col.ratio * 100}%`;
   const rowPct = `${row.ratio * 100}%`;
 
-  // CSS grid template using the resize ratios
   const gridTemplateColumns = `${colPct} 1fr`;
   const gridTemplateRows = `${rowPct} 1fr`;
 
@@ -191,7 +168,7 @@ function Dashboard() {
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-detective-accent" />
               <span className="text-gray-400 text-xs">
-                {cameraFrames.length} frames
+                {cameraFrames.length} frames · {events.length} events
               </span>
             </div>
           )}
@@ -221,7 +198,6 @@ function Dashboard() {
         </div>
       </header>
 
-      {/* Grid layout: 2 columns x 2 rows */}
       <div
         ref={col.containerRef}
         className="flex-1 relative overflow-hidden"
@@ -232,7 +208,7 @@ function Dashboard() {
           gap: "8px",
         }}
       >
-        {/* Cell (1,1) — Footage (top-left) */}
+        {/* Cell (1,1) — Footage */}
         <div className="min-w-0 min-h-0 overflow-hidden border-r border-b border-detective-600/30 bg-detective-900 p-2">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
@@ -259,7 +235,7 @@ function Dashboard() {
           </div>
         </div>
 
-        {/* Cell (1,2) — Top-right: toggle between Report and 3D Scene */}
+        {/* Cell (1,2) — Top-right: Report / 3D Scene */}
         <div className="min-w-0 min-h-0 overflow-hidden border-b border-detective-600/30 bg-detective-900 p-2">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
@@ -291,6 +267,7 @@ function Dashboard() {
                 eventCount={events.length}
                 onReportUpdate={handleReportUpdate}
                 cameraSummary={cameraSummary}
+                events={events}
               />
             ) : (
               <SceneCanvas3D />
@@ -310,15 +287,10 @@ function Dashboard() {
             <div className="text-xs text-gray-500">Phase: {phase}</div>
           </div>
           <div className="h-full">
-            <DetectiveChat
-              caseData={caseData}
-              report={report}
-              onReportUpdate={handleReportUpdate}
-            />
+            <DetectiveChat cameraContext={cameraContext} />
           </div>
         </div>
 
-        {/* Resize handles: horizontal and vertical */}
         <div
           onPointerDown={row.onPointerDown}
           className="absolute left-0 right-0 h-1 cursor-row-resize -translate-y-1/2 z-30"
