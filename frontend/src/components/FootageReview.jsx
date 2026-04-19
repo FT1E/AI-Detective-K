@@ -26,7 +26,7 @@ export default function FootageReview({
 
   // Resolve which frame to show
   const totalFrames = frames.length;
-  const displayIndex =
+  let displayIndex =
     frameIndex < 0 || frameIndex >= totalFrames
       ? totalFrames - 1
       : frameIndex;
