@@ -1,6 +1,5 @@
 // Change your base URL here
-const BASE_URL = "https://ai-detective-k-9gvw.onrender.com";
-
+const BASE_URL = import.meta.env.PROD ? "https://ai-detective-k-9gvw.onrender.com" : "";
 /**
  * Constructs a full API URL. 
  * Ensures the path starts with /api

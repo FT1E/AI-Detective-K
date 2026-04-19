@@ -99,16 +99,12 @@ function Dashboard() {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
 
-  useEffect(() => {
-    fetchCaseData()
-      .then((data) => {
-        setBackendConnected(true);
-        setCaseData(data);
+useEffect(() => {
+    fetch("/api/camera-output")
+      .then((res) => {
+        if (res.ok) setBackendConnected(true);
       })
-      .catch((err) => {
-        setBackendConnected(false);
-        console.error("Error fetching case:", err);
-      });
+      .catch(() => setBackendConnected(false));
   }, []);
 
   const handleVisionSync = async () => {
@@ -118,10 +114,6 @@ function Dashboard() {
       const data = await fetchCameraOutput();
       setCameraFrames(data);
       setBackendConnected(true);
-      const analysis = await runAnalysis();
-      setEvents(analysis.events || []);
-      setReport(analysis.report || null);
-      if (analysis.case_data) setCaseData(analysis.case_data);
     } catch (err) {
       console.error("Vision sync error:", err);
     } finally {
