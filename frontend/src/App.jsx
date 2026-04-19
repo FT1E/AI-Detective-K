@@ -4,7 +4,7 @@ import IncidentReport from "./components/IncidentReport";
 import FrameAnnotator from "./components/FrameAnnotator";
 import FollowUpQuestions from "./components/FollowUpQuestions";
 // import DetectiveChat from "./components/DetectiveChat";
-import { fetchCaseData, runAnalysis, fetchCameraOutput, runAgentAnalysis } from "./lib/api";
+import { fetchCaseData, runAnalysis, fetchCameraOutput, runAgentAnalysis, fetchFollowUpQuestions } from "./lib/api";
 
 /* ── Resize hook ── */
 function useResize(initial, axis) {
@@ -186,13 +186,24 @@ function Dashboard() {
 
   const handleSelectOption = async (questionText, option) => {
     const currentQ = followUpState.questions;
+    const updatedHistory = [...followUpState.history, { question: currentQ, answer: option }];
     setFollowUpState((prev) => ({
       ...prev,
-      history: [...prev.history, { question: currentQ, answer: option }],
+      history: updatedHistory,
       questions: null,
       loading: true,
     }));
-    // TODO Step 5: call fetchFollowUpQuestions for next question
+    try {
+      const nextQ = await fetchFollowUpQuestions(annotations, report?.narrative || "", updatedHistory);
+      if (nextQ.investigation_complete) {
+        setFollowUpState((prev) => ({ ...prev, loading: false, stage: "complete" }));
+      } else {
+        setFollowUpState((prev) => ({ ...prev, questions: nextQ, loading: false, stage: "questioning" }));
+      }
+    } catch (err) {
+      console.error("Follow-up fetch failed:", err);
+      setFollowUpState((prev) => ({ ...prev, loading: false, stage: "idle" }));
+    }
   };
 
   const handleCustomAnswer = async (questionText, text) => {

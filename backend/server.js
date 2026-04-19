@@ -10,6 +10,7 @@ import investigateRouter from "./routes/investigate.js";
 import eventsRouter, { handleWebSocket } from "./routes/events.js";
 import cameraOutputRouter from "./routes/cameraOutput.js";
 import ingestRouter from "./routes/ingest.js";
+import agentRouter from "./routes/agent.js";
 
 const app = express();
 const server = createServer(app);
@@ -25,6 +26,7 @@ app.use("/api", investigateRouter);
 app.use("/api", eventsRouter);
 app.use("/api", cameraOutputRouter);
 app.use("/api", ingestRouter);
+app.use("/api", agentRouter);
 
 // WebSocket — /ws/events
 const wss = new WebSocketServer({ server, path: "/ws/events" });

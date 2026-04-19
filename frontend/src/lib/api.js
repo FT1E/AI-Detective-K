@@ -57,3 +57,12 @@ export async function runAgentAnalysis(annotations = []) {
     body: JSON.stringify({ annotations }),
   });
 }
+
+export async function fetchFollowUpQuestions(annotations, analysisSummary, history) {
+  const res = await fetch(getApiUrl("/agent/follow-up"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ annotations, analysis_summary: analysisSummary, history }),
+  });
+  return res.json();
+}
