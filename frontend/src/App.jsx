@@ -3,13 +3,7 @@ import FootageReview from "./components/FootageReview";
 import IncidentReport from "./components/IncidentReport";
 import SceneCanvas3D from "./components/SceneCanvas3D";
 import DetectiveChat from "./components/DetectiveChat";
-import { fetchCaseData, runAnalysis, triggerVisionSync } from "./lib/api";
-import {
-  EMPTY_VIDEO_SOURCES,
-  revokeVideoSource,
-  replaceVideoSource,
-  clearAllVideoSources,
-} from "./lib/videoSources";
+import { fetchCaseData, runAnalysis, fetchCameraOutput } from "./lib/api";
 
 /* ── Resize hook ── */
 function useResize(initial, axis) {
@@ -70,14 +64,11 @@ function MoonIcon() {
 function Dashboard() {
   const [events, setEvents] = useState([]);
   const [report, setReport] = useState(null);
-  const [analyzing, setAnalyzing] = useState(false);
   const [viewMode, setViewMode] = useState("rgb");
-  const [selectedEvent, setSelectedEvent] = useState(null);
   const [caseData, setCaseData] = useState(null);
-  const [videoSources, setVideoSources] = useState(EMPTY_VIDEO_SOURCES);
   const [backendConnected, setBackendConnected] = useState(false);
   const [theme, setTheme] = useState("dark");
-  const latestVideoSourcesRef = useRef(videoSources);
+  const [cameraFrames, setCameraFrames] = useState([]);
 
   const col = useResize(0.5, "col");
   const row = useResize(0.5, "row");
@@ -85,16 +76,6 @@ function Dashboard() {
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
-
-  useEffect(() => {
-    latestVideoSourcesRef.current = videoSources;
-  }, [videoSources]);
-
-  useEffect(() => {
-    return () => {
-      Object.values(latestVideoSourcesRef.current).forEach(revokeVideoSource);
-    };
-  }, []);
 
   useEffect(() => {
     fetchCaseData()
@@ -108,50 +89,26 @@ function Dashboard() {
       });
   }, []);
 
-  const resetAnalysisState = () => {
-    setEvents([]);
-    setReport(null);
-    setSelectedEvent(null);
-    setAnalyzing(false);
-  };
+  const [syncing, setSyncing] = useState(false);
 
-  const handleUploadVideo = async (mode, file) => {
-    if (!file) return;
-    resetAnalysisState();
-    setViewMode(mode);
-    setVideoSources((prev) => replaceVideoSource(prev, mode, file));
-
-    // Fire vision sync (stubbed for now)
+  const handleVisionSync = async () => {
+    if (syncing) return;
+    setSyncing(true);
     try {
-      await triggerVisionSync(file, mode);
+      const data = await fetchCameraOutput();
+      const allFrames = data.flat();
+      setCameraFrames(allFrames);
+      setBackendConnected(true);
+
+      // Run analysis with the fetched data
+      const analysis = await runAnalysis();
+      setEvents(analysis.events || []);
+      setReport(analysis.report || null);
+      if (analysis.case_data) setCaseData(analysis.case_data);
     } catch (err) {
       console.error("Vision sync error:", err);
-    }
-  };
-
-  const handleClearSession = () => {
-    setVideoSources((prev) => clearAllVideoSources(prev));
-    setViewMode("rgb");
-    resetAnalysisState();
-  };
-
-  const handleAnalyze = async () => {
-    const hasUploads = Object.values(videoSources).some(Boolean);
-    if (!hasUploads || analyzing) return;
-    setAnalyzing(true);
-    setSelectedEvent(null);
-
-    try {
-      const data = await runAnalysis();
-      setBackendConnected(true);
-      setEvents(data.events || []);
-      setReport(data.report || null);
-      if (data.case_data) setCaseData(data.case_data);
-    } catch (err) {
-      setBackendConnected(false);
-      console.error("Analyze footage error:", err);
     } finally {
-      setAnalyzing(false);
+      setSyncing(false);
     }
   };
 
@@ -159,13 +116,11 @@ function Dashboard() {
     setReport(updatedReport);
   };
 
-  const hasUploads = Object.values(videoSources).some(Boolean);
-  const uploadedViewCount = Object.values(videoSources).filter(Boolean).length;
   const phase = report
     ? "report"
-    : analyzing
+    : syncing
       ? "analyzing"
-      : hasUploads
+      : cameraFrames.length > 0
         ? "reviewing"
         : "idle";
 
@@ -192,11 +147,11 @@ function Dashboard() {
               Case {report.case_id}
             </span>
           )}
-          {hasUploads && (
+          {cameraFrames.length > 0 && (
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-detective-accent" />
               <span className="text-gray-400 text-xs">
-                {uploadedViewCount} view{uploadedViewCount === 1 ? "" : "s"} loaded
+                {cameraFrames.length} frames
               </span>
             </div>
           )}
@@ -206,10 +161,10 @@ function Dashboard() {
               {backendConnected ? "Backend Online" : "Backend Offline"}
             </span>
           </div>
-          {analyzing && (
+          {syncing && (
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-detective-warn recording-pulse" />
-              <span className="text-detective-warn font-medium text-xs">ANALYZING</span>
+              <span className="text-detective-warn font-medium text-xs">SYNCING</span>
             </div>
           )}
           <button
@@ -226,17 +181,12 @@ function Dashboard() {
         <div style={{ height: rowPct }} className="flex shrink-0 min-h-0">
           <div style={{ width: colPct }} className="shrink-0 min-w-0 overflow-hidden border-r border-detective-600/30">
             <FootageReview
-              videoSources={videoSources}
-              onUploadVideo={handleUploadVideo}
-              onClearSession={handleClearSession}
-              onAnalyze={handleAnalyze}
+              frames={cameraFrames}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
-              phase={phase}
-              eventCount={events.length}
-              selectedEvent={selectedEvent}
-              analyzing={analyzing}
               backendConnected={backendConnected}
+              onVisionSync={handleVisionSync}
+              syncing={syncing}
             />
           </div>
           <div className="flex-1 min-w-0 overflow-hidden">
@@ -261,7 +211,7 @@ function Dashboard() {
             <IncidentReport
               report={report}
               phase={phase}
-              analyzing={analyzing}
+              analyzing={syncing}
               eventCount={events.length}
               onReportUpdate={handleReportUpdate}
             />

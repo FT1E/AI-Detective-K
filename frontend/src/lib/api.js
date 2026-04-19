@@ -45,33 +45,16 @@ export async function runAnalysis() {
 }
 
 /**
- * Vision Sync Trigger — sends video/sensor data to the backend for processing.
- *
- * POSTs the video file, sensor mode, and optional metadata to the backend.
- * The backend stores the file, starts the processing pipeline, and returns
- * an acknowledgement with a job/session ID.
- *
- * @param {File}   file     The video file selected by the user.
- * @param {string} mode     The sensor mode — "rgb" | "thermal" | "depth".
- * @param {object} [meta]   Optional extra metadata to attach.
- * @returns {Promise<object>} Backend acknowledgement.
+ * GET all camera output entries posted by the OAK camera script.
+ * Each entry contains { detections, rgb_base64, depth_base64, timestamp, received_at }.
+ * @returns {Promise<object[]>}
  */
-export async function triggerVisionSync(file, mode, meta = {}) {
-  const form = new FormData();
-  form.append("file", file);
-  form.append("mode", mode);
-  form.append("meta", JSON.stringify(meta));
-
-  const res = await fetch(getApiUrl("/vision-sync"), {
-    method: "POST",
-    body: form,
-  });
-
+export async function fetchCameraOutput() {
+  const res = await fetch(getApiUrl("/camera-output"));
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`Vision sync failed: ${res.status} ${text.slice(0, 200)}`);
+    throw new Error(`Camera output GET failed: ${res.status} ${text.slice(0, 200)}`);
   }
-
   return res.json();
 }
 
