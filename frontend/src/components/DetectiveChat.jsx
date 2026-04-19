@@ -217,13 +217,16 @@ function TypingIndicator() {
   );
 }
 
-export default function DetectiveChat({ caseData }) {
+export default function DetectiveChat({ cameraContext }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
   const [investigating, setInvestigating] = useState(false);
   const scrollRef = useRef(null);
+
+  const hasCameraData =
+    !!cameraContext?.summary && cameraContext.summary.totalFrames > 0;
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -244,7 +247,7 @@ export default function DetectiveChat({ caseData }) {
     setStreamingContent("");
 
     try {
-      const res = await sendInvestigateMessage(caseData, newMessages);
+      const res = await sendInvestigateMessage(cameraContext, newMessages);
 
       const contentType = res.headers.get("content-type") || "";
 
@@ -361,11 +364,6 @@ export default function DetectiveChat({ caseData }) {
   if (!investigating) {
     return (
       <div className="flex flex-col h-full">
-        <div className="flex items-center justify-between px-4 py-2.5 bg-detective-800/50 border-b border-detective-600/20 shrink-0">
-          <h2 className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
-            AI Detective
-          </h2>
-        </div>
         <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
           <div className="w-14 h-14 rounded-full bg-gradient-to-br from-detective-accent/20 to-blue-600/20 border border-detective-accent/30 flex items-center justify-center mb-4">
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-detective-accent to-blue-600 flex items-center justify-center">
@@ -379,47 +377,59 @@ export default function DetectiveChat({ caseData }) {
             AI Investigation Assistant
           </p>
           <p className="text-[11px] text-gray-600 leading-relaxed mb-6 max-w-[280px]">
-            Analyzes multi-modal sensor evidence, asks follow-up questions,
-            builds hypotheses, and reconstructs incidents.
+            Reads the OAK-D camera feed — object detections, spatial distances,
+            and a few representative frames — and investigates with you.
           </p>
 
-          {/* Case summary card */}
+          {/* Camera sync card */}
           <div className="w-full bg-detective-800/40 rounded-xl p-3.5 border border-detective-600/15 mb-4 text-left">
             <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-2">
-              Case File Ready
+              {hasCameraData
+                ? "Camera Context Ready"
+                : "Waiting for Camera Data"}
             </div>
-            <div className="space-y-1.5 text-[11px]">
-              <div className="flex justify-between">
-                <span className="text-gray-500">Location</span>
-                <span className="text-gray-400">
-                  {caseData?.scene_data?.location || "Industrial warehouse"}
-                </span>
+            {hasCameraData ? (
+              <div className="space-y-1.5 text-[11px]">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Frames</span>
+                  <span className="text-detective-accent font-mono">
+                    {cameraContext.summary.totalFrames}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Object types</span>
+                  <span className="text-gray-400 font-mono">
+                    {cameraContext.summary.classes?.length || 0}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Derived events</span>
+                  <span className="text-gray-400 font-mono">
+                    {cameraContext.events?.length || 0}
+                  </span>
+                </div>
+                {cameraContext.summary.closest && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Closest</span>
+                    <span className="text-gray-400">
+                      {cameraContext.summary.closest.name} @{" "}
+                      {cameraContext.summary.closest.distance.toFixed(2)}m
+                    </span>
+                  </div>
+                )}
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Date / Time</span>
-                <span className="text-detective-accent font-mono">
-                  {caseData?.scene_data?.date || "—"}{" "}
-                  {caseData?.scene_data?.time || ""}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Evidence</span>
-                <span className="text-gray-400 font-mono">
-                  {caseData?.evidence?.length || 0}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Environment</span>
-                <span className="text-gray-400">
-                  {caseData?.scene_data?.environment || "—"}
-                </span>
-              </div>
-            </div>
+            ) : (
+              <p className="text-[11px] text-gray-500 leading-relaxed">
+                Click <span className="text-detective-accent">Sync</span> above
+                to pull the latest frames. Then press Investigate.
+              </p>
+            )}
           </div>
 
           <button
             onClick={handleInvestigate}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm bg-gradient-to-r from-detective-accent to-blue-600 text-white hover:opacity-90 transition-opacity shadow-lg shadow-detective-accent/20"
+            disabled={!hasCameraData}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm bg-gradient-to-r from-detective-accent to-blue-600 text-white hover:opacity-90 transition-opacity shadow-lg shadow-detective-accent/20 disabled:opacity-30 disabled:cursor-not-allowed"
           >
             <svg
               className="w-4 h-4"

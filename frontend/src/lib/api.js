@@ -1,8 +1,5 @@
 import { getApiUrl } from "./urls";
 
-/**
- * Shared helper to handle common fetch logic (error handling + JSON parsing)
- */
 async function apiFetch(endpoint, options = {}) {
   const response = await fetch(getApiUrl(endpoint), options);
 
@@ -15,21 +12,12 @@ async function apiFetch(endpoint, options = {}) {
   return contentType.includes("application/json") ? response.json() : response;
 }
 
-export async function fetchCaseData() {
-  return apiFetch("/case/dummy");
-}
-
-export async function runAnalysis() {
-  return apiFetch("/analysis/demo");
-}
-
-export async function sendInvestigateMessage(caseData, messages) {
-  // We use standard fetch here because you might want to handle streaming (SSE)
+export async function sendInvestigateMessage(cameraContext, messages) {
   return fetch(getApiUrl("/investigate"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      case_data: caseData,
+      camera_context: cameraContext,
       messages: messages
         .filter((m) => m.role !== "system")
         .map((m) => ({ role: m.role, content: m.content })),
@@ -37,15 +25,6 @@ export async function sendInvestigateMessage(caseData, messages) {
   });
 }
 
-/**
- * Simplified camera fetch. 
- * If you need the timeout/fallback logic, it's best kept separate.
- */
 export async function fetchCameraOutput() {
-  try {
-    return await apiFetch("/camera-output");
-  } catch (err) {
-    console.error("Camera fetch failed:", err);
-    throw err;
-  }
+  return apiFetch("/camera-output");
 }
