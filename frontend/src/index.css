@@ -147,3 +147,25 @@ body {
 .resize-handle-row:active {
   background-color: rgb(var(--d-accent) / 0.5);
 }
+
+/* Capture frame button in FootageReview */
+.capture-btn {
+  background: linear-gradient(135deg, #00d4ff 0%, #0099cc 100%);
+  color: #0a0f1a;
+  border: none;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.7rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.capture-btn:hover:not(:disabled) {
+  transform: scale(1.05);
+  box-shadow: 0 0 12px rgba(0, 212, 255, 0.4);
+}
+.capture-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

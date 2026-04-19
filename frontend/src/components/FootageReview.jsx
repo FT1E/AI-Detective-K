@@ -17,6 +17,7 @@ export default function FootageReview({
   backendConnected,
   onVisionSync,
   syncing,
+  onCaptureFrame,
 }) {
   const [zoom, setZoom] = useState(1);
   const [frameIndex, setFrameIndex] = useState(-1); // -1 = latest
@@ -306,6 +307,19 @@ export default function FootageReview({
             className="h-6 px-2 rounded border border-detective-success/30 bg-detective-success/15 text-[10px] font-medium text-detective-success transition-colors hover:bg-detective-success/25 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {syncing ? "Syncing…" : "Sync"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (frames.length > 0 && onCaptureFrame) {
+                onCaptureFrame(frames[displayIndex]);
+              }
+            }}
+            disabled={frames.length === 0}
+            className="capture-btn h-6 px-2"
+            title="Send current frame to annotation panel"
+          >
+            📸 Capture
           </button>
         </div>
 
