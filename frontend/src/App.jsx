@@ -294,7 +294,7 @@ function Dashboard() {
                 phase={phase}
                 analyzing={syncing}
                 eventCount={events.length}
-                onReportUpdate={handleReportUpdate}
+                //onReportUpdate={handleReportUpdate}
                 onGenerate={handleGenerateReport}
                 cameraSummary={cameraSummary}
                 events={events}
