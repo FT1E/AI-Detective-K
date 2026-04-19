@@ -87,29 +87,36 @@ function IdleState({ cameraSummary, events, onGenerate }) {
   const hasData = cameraSummary || (events && events.length > 0);
   return (
     <div className="flex flex-col h-full min-h-0 overflow-y-auto">
-      {hasData && (
-        <div className="p-4 border-b border-detective-600/20">
-          <button
-            onClick={onGenerate}
-            className="w-full px-3 py-2 text-xs font-semibold rounded-lg bg-detective-accent/20 text-detective-accent border border-detective-accent/30 hover:bg-detective-accent/30 transition"
+      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-detective-accent/20 bg-detective-accent/10">
+          <svg
+            className="h-7 w-7 text-detective-accent"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
           >
-            Generate Report (Snapshot)
-          </button>
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={1.5}
+              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+            />
+          </svg>
         </div>
-      )}
-      {cameraSummary && (
-        <div className="p-4 border-b border-detective-600/20">
-          <CameraSummarySection
-            summary={cameraSummary}
-            title="Live Sensor Detections"
-          />
-        </div>
-      )}
-      {events && events.length > 0 && (
-        <div className="p-4 border-b border-detective-600/20">
-          <EventsTimeline events={events} title="Live Timeline" />
-        </div>
-      )}
+        <p className="text-sm font-medium text-gray-200">No Report Generated</p>
+        <p className="mt-2 max-w-xs text-[11px] leading-relaxed text-gray-500">
+          {hasData
+            ? "Click below to capture a snapshot of the current footage and build an incident report."
+            : "Sync footage first, then generate a report from the captured frames."}
+        </p>
+        <button
+          onClick={onGenerate}
+          disabled={!hasData}
+          className="mt-4 rounded-lg border border-detective-accent/30 bg-detective-accent/15 px-4 py-2 text-xs font-medium text-detective-accent transition-colors hover:bg-detective-accent/25 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Generate Report
+        </button>
+      </div>
     </div>
   );
 }
