@@ -2,10 +2,68 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import FootageReview from "./components/FootageReview";
 import IncidentReport from "./components/IncidentReport";
 import SceneCanvas3D from "./components/SceneCanvas3D";
-import DetectiveChat from "./components/DetectiveChat";
-import { fetchCameraOutput } from "./lib/api";
+import FrameAnnotator from "./components/FrameAnnotator";
+import FollowUpQuestions from "./components/FollowUpQuestions";
+import {
+  fetchCameraOutput,
+  finalizeInvestigationWorkflow,
+  startInvestigationWorkflow,
+} from "./lib/api";
 import { summarizeFrames } from "./lib/cameraSummary";
 import { extractEvents, pickKeyFrames } from "./lib/cameraEvents";
+
+const INITIAL_WORKFLOW_STATE = {
+  status: "idle",
+  questions: [],
+  currentIndex: 0,
+  answers: [],
+  analysisContext: null,
+  error: "",
+};
+
+function normalizeQuestions(rawQuestions) {
+  if (!Array.isArray(rawQuestions)) return [];
+  return rawQuestions
+    .map((q, qi) => {
+      const questionText =
+        typeof q?.question === "string" ? q.question.trim() : "";
+      if (!questionText) return null;
+
+      let choices = Array.isArray(q?.choices) ? q.choices : [];
+      choices = choices
+        .map((choice, ci) => {
+          if (typeof choice === "string") {
+            return {
+              id: `q${qi + 1}_c${ci + 1}`,
+              text: choice,
+            };
+          }
+          if (!choice || typeof choice !== "object") return null;
+          const text =
+            choice.text || choice.label || choice.title || `Choice ${ci + 1}`;
+          return {
+            id: choice.id || `q${qi + 1}_c${ci + 1}`,
+            text,
+          };
+        })
+        .filter(Boolean);
+
+      if (choices.length === 0) {
+        choices = [
+          { id: `q${qi + 1}_c1`, text: "Likely" },
+          { id: `q${qi + 1}_c2`, text: "Possible" },
+          { id: `q${qi + 1}_c3`, text: "Unlikely" },
+        ];
+      }
+
+      return {
+        id: q.id || `q${qi + 1}`,
+        question: questionText,
+        choices,
+      };
+    })
+    .filter(Boolean);
+}
 
 /* ── Resize hook ── */
 function useResize(initial, axis) {
@@ -93,6 +151,8 @@ function Dashboard() {
   const [theme, setTheme] = useState("dark");
   const [cameraFrames, setCameraFrames] = useState([]);
   const [syncing, setSyncing] = useState(false);
+  const [capturedFrame, setCapturedFrame] = useState(null);
+  const [workflowState, setWorkflowState] = useState(INITIAL_WORKFLOW_STATE);
 
   const col = useResize(0.5, "col");
   const row = useResize(0.5, "row");
@@ -167,6 +227,197 @@ function Dashboard() {
       key_frames: pickKeyFrames(cameraFrames, events, 4),
     };
   }, [cameraSummary, events, cameraFrames]);
+
+  const handleCaptureFrame = useCallback((frame) => {
+    setCapturedFrame(frame || null);
+    setWorkflowState(INITIAL_WORKFLOW_STATE);
+  }, []);
+
+  const handleClearCapture = useCallback(() => {
+    setCapturedFrame(null);
+    setWorkflowState(INITIAL_WORKFLOW_STATE);
+  }, []);
+
+  const runFinalize = useCallback(
+    async ({ questions, answers, analysisContext }) => {
+      setWorkflowState((prev) => ({
+        ...prev,
+        status: "finalizing",
+        error: "",
+      }));
+
+      try {
+        const result = await finalizeInvestigationWorkflow({
+          camera_context: cameraContext,
+          analysis_context: analysisContext,
+          questions,
+          answers,
+        });
+
+        if (result?.report) {
+          setReport(result.report);
+        }
+
+        setWorkflowState({
+          status: "completed",
+          questions,
+          currentIndex: questions.length,
+          answers,
+          analysisContext,
+          error: "",
+        });
+      } catch (err) {
+        setWorkflowState((prev) => ({
+          ...prev,
+          status: "error",
+          error: err.message || "Failed to finalize investigation report.",
+        }));
+      }
+    },
+    [cameraContext],
+  );
+
+  const handleAnalyzeFrame = useCallback(
+    async (annotations) => {
+      if (!cameraContext) {
+        setWorkflowState((prev) => ({
+          ...prev,
+          status: "error",
+          error: "Load camera frames before running analysis.",
+        }));
+        return;
+      }
+
+      if (!capturedFrame) {
+        setWorkflowState((prev) => ({
+          ...prev,
+          status: "error",
+          error: "Capture a frame before running analysis.",
+        }));
+        return;
+      }
+
+      setWorkflowState({
+        status: "analyzing",
+        questions: [],
+        currentIndex: 0,
+        answers: [],
+        analysisContext: null,
+        error: "",
+      });
+
+      try {
+        const result = await startInvestigationWorkflow({
+          camera_context: cameraContext,
+          captured_frame: capturedFrame,
+          annotations: Array.isArray(annotations) ? annotations : [],
+        });
+
+        const questions = normalizeQuestions(result?.questions);
+        const analysisContext = result?.analysis_context || null;
+
+        if (questions.length === 0) {
+          await runFinalize({
+            questions: [],
+            answers: [],
+            analysisContext,
+          });
+          return;
+        }
+
+        setWorkflowState({
+          status: "questions",
+          questions,
+          currentIndex: 0,
+          answers: [],
+          analysisContext,
+          error: "",
+        });
+      } catch (err) {
+        setWorkflowState((prev) => ({
+          ...prev,
+          status: "error",
+          error: err.message || "Failed to analyze frame.",
+        }));
+      }
+    },
+    [cameraContext, capturedFrame, runFinalize],
+  );
+
+  const handleSelectChoice = useCallback(
+    async (choice) => {
+      if (workflowState.status !== "questions") return;
+
+      const currentQuestion =
+        workflowState.questions[workflowState.currentIndex] || null;
+      if (!currentQuestion) return;
+
+      const nextAnswers = [
+        ...workflowState.answers,
+        {
+          question_id: currentQuestion.id,
+          question: currentQuestion.question,
+          answer_id: choice?.id || null,
+          answer: choice?.text || "",
+        },
+      ];
+
+      const nextIndex = workflowState.currentIndex + 1;
+      if (nextIndex >= workflowState.questions.length) {
+        await runFinalize({
+          questions: workflowState.questions,
+          answers: nextAnswers,
+          analysisContext: workflowState.analysisContext,
+        });
+        return;
+      }
+
+      setWorkflowState((prev) => ({
+        ...prev,
+        answers: nextAnswers,
+        currentIndex: nextIndex,
+      }));
+    },
+    [workflowState, runFinalize],
+  );
+
+  const handleSkipQuestion = useCallback(async () => {
+    if (workflowState.status !== "questions") return;
+
+    const currentQuestion =
+      workflowState.questions[workflowState.currentIndex] || null;
+    if (!currentQuestion) return;
+
+    const nextAnswers = [
+      ...workflowState.answers,
+      {
+        question_id: currentQuestion.id,
+        question: currentQuestion.question,
+        answer_id: null,
+        answer: "Skipped",
+      },
+    ];
+
+    const nextIndex = workflowState.currentIndex + 1;
+    if (nextIndex >= workflowState.questions.length) {
+      await runFinalize({
+        questions: workflowState.questions,
+        answers: nextAnswers,
+        analysisContext: workflowState.analysisContext,
+      });
+      return;
+    }
+
+    setWorkflowState((prev) => ({
+      ...prev,
+      answers: nextAnswers,
+      currentIndex: nextIndex,
+    }));
+  }, [workflowState, runFinalize]);
+
+  const handleResetQuestions = useCallback(() => {
+    setWorkflowState(INITIAL_WORKFLOW_STATE);
+  }, []);
 
   const phase = "idle";
   const [topRightView, setTopRightView] = useState("report");
@@ -258,6 +509,7 @@ function Dashboard() {
               backendConnected={backendConnected}
               onVisionSync={handleVisionSync}
               syncing={syncing}
+              onCaptureFrame={handleCaptureFrame}
             />
           </div>
         </div>
@@ -301,16 +553,31 @@ function Dashboard() {
           </div>
         </div>
 
-        {/* Cell (2,1) — AI Detective chat */}
+        {/* Cell (2,1) — Frame annotation and follow-up */}
         <div
           className="min-w-0 min-h-0 overflow-hidden border-r border-detective-600/30 bg-detective-900 p-2"
           style={{ gridRow: "1 / span 2" }}
         >
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-xs text-gray-500">Phase: {phase}</div>
-          </div>
-          <div className="h-full">
-            <DetectiveChat cameraContext={cameraContext} />
+          <div className="h-full grid grid-rows-2 gap-2">
+            <div className="min-h-0 overflow-hidden">
+              <FrameAnnotator
+                frame={capturedFrame}
+                analyzing={
+                  workflowState.status === "analyzing" ||
+                  workflowState.status === "finalizing"
+                }
+                onAnalyze={handleAnalyzeFrame}
+                onClearCapture={handleClearCapture}
+              />
+            </div>
+            <div className="min-h-0 overflow-hidden">
+              <FollowUpQuestions
+                workflow={workflowState}
+                onSelectChoice={handleSelectChoice}
+                onSkipQuestion={handleSkipQuestion}
+                onResetQuestions={handleResetQuestions}
+              />
+            </div>
           </div>
         </div>
 

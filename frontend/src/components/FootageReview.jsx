@@ -22,6 +22,7 @@ export default function FootageReview({
   backendConnected,
   onVisionSync,
   syncing,
+  onCaptureFrame,
 }) {
   const [zoom, setZoom] = useState(1);
   const [frameIndex, setFrameIndex] = useState(0);
@@ -84,6 +85,15 @@ export default function FootageReview({
   const handleFrameScrub = (nextIndex) => {
     setIsPlaying(false);
     setFrameIndex(nextIndex);
+  };
+
+  const handleCapture = () => {
+    if (!currentFrame) return;
+    onCaptureFrame?.({
+      ...currentFrame,
+      frame_index: displayIndex,
+      captured_at: new Date().toISOString(),
+    });
   };
 
   const isFirstFrame = frameIndex <= 0;
@@ -280,6 +290,15 @@ export default function FootageReview({
             className="h-6 px-2 rounded border border-detective-success/30 bg-detective-success/15 text-[10px] font-medium text-detective-success transition-colors hover:bg-detective-success/25 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {syncing ? "Loading…" : "Load 300"}
+          </button>
+          <button
+            type="button"
+            onClick={handleCapture}
+            disabled={totalFrames === 0 || !currentFrame}
+            className="h-6 px-2 rounded border border-detective-accent/30 bg-detective-accent/15 text-[10px] font-medium text-detective-accent transition-colors hover:bg-detective-accent/25 disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Capture current frame for annotation"
+          >
+            📸 Capture
           </button>
         </div>
 

@@ -28,3 +28,19 @@ export async function sendInvestigateMessage(cameraContext, messages) {
 export async function fetchCameraOutput() {
   return apiFetch("/camera-output");
 }
+
+export async function startInvestigationWorkflow(payload) {
+  return apiFetch("/investigate/workflow/start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload || {}),
+  });
+}
+
+export async function finalizeInvestigationWorkflow(payload) {
+  return apiFetch("/investigate/workflow/finalize", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload || {}),
+  });
+}
