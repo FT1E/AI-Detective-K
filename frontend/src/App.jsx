@@ -106,7 +106,7 @@ function Dashboard() {
     setSyncing(true);
     try {
       const data = await fetchCameraOutput();
-      const frames = (Array.isArray(data) ? data : []).slice(0, 30);
+      const frames = (Array.isArray(data) ? data : []).slice(0, 300);
       setCameraFrames(frames);
       setBackendConnected(true);
       return frames;
@@ -247,7 +247,7 @@ function Dashboard() {
               onClick={handleVisionSync}
               className="px-3 py-1 text-xs rounded-lg bg-detective-accent/20 text-detective-accent border border-detective-accent/30 hover:bg-detective-accent/30 transition"
             >
-              Load 30
+              Load 300
             </button>
           </div>
           <div className="h-full">

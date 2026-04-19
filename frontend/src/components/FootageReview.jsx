@@ -197,7 +197,7 @@ export default function FootageReview({
               disabled={syncing || !backendConnected}
               className="mt-4 rounded-lg border border-detective-accent/30 bg-detective-accent/15 px-4 py-2 text-xs font-medium text-detective-accent transition-colors hover:bg-detective-accent/25 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {syncing ? "Loading..." : "Load 30 Frames"}
+              {syncing ? "Loading..." : "Load 300 Frames"}
             </button>
             <div className="mt-3 flex items-center gap-2">
               <div className={`w-2 h-2 rounded-full ${backendConnected ? "bg-detective-success" : "bg-detective-danger"}`} />
@@ -279,7 +279,7 @@ export default function FootageReview({
             disabled={syncing || !backendConnected}
             className="h-6 px-2 rounded border border-detective-success/30 bg-detective-success/15 text-[10px] font-medium text-detective-success transition-colors hover:bg-detective-success/25 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {syncing ? "Loading…" : "Load 30"}
+            {syncing ? "Loading…" : "Load 300"}
           </button>
         </div>
 

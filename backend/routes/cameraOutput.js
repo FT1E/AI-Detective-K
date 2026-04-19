@@ -4,7 +4,7 @@ const router = Router();
 
 let store = [];
 
-const MAX_FRAMES = 30;
+const MAX_FRAMES = 300;
 
 router.post("/camera-output", (req, res) => {
   const received_at = new Date().toISOString();
