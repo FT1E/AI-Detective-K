@@ -289,19 +289,21 @@ export default function IncidentReport({
   if (analyzing) return <AnalyzingState eventCount={eventCount} />;
 
   // Show idle state when no report exists
-  if (!report)
+  if (!report) {
     return (
       <IdleState
-        cameraSummary={cameraSummary}
-        events={events}
+        cameraSummary={cameraSummary} // Live data
+        events={events} // Live data
         onGenerate={onGenerate}
       />
     );
+  }
 
   // Show report view
   const threat =
     THREAT_STYLES[report.threat_assessment?.level] || THREAT_STYLES.moderate;
-  const [narrativeDraft, setNarrativeDraft] = useState(report.narrative || "");
+  const [narrativeDraft, setNarrativeDraft] = useState("");
+  const [currentCaseId, setCurrentCaseId] = useState(null);
 
   const updateField = (path, value) => {
     if (!onReportUpdate) return;
@@ -316,8 +318,11 @@ export default function IncidentReport({
   };
 
   useEffect(() => {
-    setNarrativeDraft(report.narrative || "");
-  }, [report.narrative]);
+    if (report && report.case_id !== currentCaseId) {
+      setNarrativeDraft(report.narrative || "");
+      setCurrentCaseId(report.case_id);
+    }
+  }, [report?.case_id]);
 
   return (
     <div className="flex flex-col h-full">
