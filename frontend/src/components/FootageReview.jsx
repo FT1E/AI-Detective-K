@@ -32,13 +32,13 @@ export default function FootageReview({
       : frameIndex;
   let currentFrame = totalFrames > 0 ? frames[displayIndex] : null;
 
-  useEffect(() => {
-    setTimeout(() => {
-      if(displayIndex == totalFrames) return;
-      displayIndex++;
-      currentFrame = frames[displayIndex]
-    })
-  }, [currentFrame])
+  // useEffect(() => {
+  //   setTimeout(() => {
+  //     if(displayIndex == totalFrames) return;
+  //     displayIndex++;
+  //     currentFrame = frames[displayIndex]
+  //   })
+  // }, [currentFrame])
 
   // Auto-follow latest when at the end
   useEffect(() => {
