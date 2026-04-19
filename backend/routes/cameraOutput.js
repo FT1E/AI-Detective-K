@@ -2,7 +2,7 @@ import { Router } from "express";
 
 const router = Router();
 
-let store = [];
+export let store = [];
 
 
 const MAX_FRAMES = 30

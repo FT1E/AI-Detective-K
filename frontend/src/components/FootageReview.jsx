@@ -33,14 +33,6 @@ export default function FootageReview({
       : frameIndex;
   let currentFrame = totalFrames > 0 ? frames[displayIndex] : null;
 
-  useEffect(() => {
-    setTimeout(() => {
-      if(displayIndex == totalFrames) return;
-      displayIndex++;
-      currentFrame = frames[displayIndex]
-    })
-  }, [currentFrame])
-
   // Auto-follow latest when at the end
   useEffect(() => {
     if (isPlaying) return;
@@ -158,13 +150,14 @@ export default function FootageReview({
         {imgContent != null ? (
           <>
             <img
+              src={imgContent}
               alt={`${viewMode} frame`}
               className="absolute inset-0 h-full w-full object-contain"
               style={{
                 transform: `scale(${zoom})`,
                 transformOrigin: "center center",
               }}
-            >{imgContent}</img>
+            />
 
             <div
               className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${MODE_TINT[viewMode]}`}
